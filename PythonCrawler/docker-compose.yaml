@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  pycrawler:
+    build: .
+    environment:
+      VNC_PASSWORD_FILE: /run/secrets/vnc_password
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_USER: postgres
+      POSTGRES_DB: experiment
+      DB_HOST: db
+      DB_PORT: 5432 # Internal DB port if using the provided DB (as they are in the same docker network)
+      ZMQ_HOST: tcp://accf-auto:5555
+    secrets:
+      - vnc_password
+      - db_password
+    ports:
+      - '55902:5900' # VNC
+      - '58888:8888' # Jupyer Lab Server
+    networks:
+      - accf-custom
+      - db
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16.1
+    restart: always
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_USER: postgres
+      POSTGRES_DB: experiment
+    secrets:
+      - db_password
+    ports:
+      - '55433:5432'  # Postgres database port
+    networks:
+      - db
+    volumes: 
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+secrets:
+  db_password:
+    file: secrets/db_password.txt
+  vnc_password:
+    file: secrets/vnc_password.txt
+
+volumes:
+  db:
+    driver: local
+
+networks:
+  accf-custom:
+    name: "accf-custom"
+  db:
