@@ -5,7 +5,7 @@ from datetime import datetime
 from logging import Logger
 from typing import List, Optional
 
-from playwright.sync_api import Response, Frame, Page
+from playwright.sync_api import Response, Frame
 from peewee import ForeignKeyField, TextField, BooleanField, DateTimeField
 
 from database import URL, database, BaseModel, Task
@@ -30,7 +30,7 @@ class Script(BaseModel):
 class DocumentInclusion(BaseModel):
     document = ForeignKeyField(Document, backref="document_inclusions")
     top_level_site = ForeignKeyField(Document)
-    parent = ForeignKeyField("self", null=True, backref="children") # Top-level if parent is 'null'
+    parent = ForeignKeyField("self", null=True, backref="children")  # Top-level if parent is 'null'
     crawl_date = DateTimeField()
 
 
@@ -80,24 +80,6 @@ def create_path_from_hash(hash_str: str) -> str:
     os.makedirs(dir_path, exist_ok=True)
     file_path = os.path.join(dir_path, file_name)
     return file_path
-
-
-def store_and_hash_content(response: Response) -> (str, bool):
-    """
-    Stores the content of a response according to its hash and returns the hash.
-    Also performs string matching for SAA functions on content.
-
-    :param response: Playwright Response object
-    :return: Hash of the stored content and boolean whether SAA function were found with string matching
-    """
-    content = response.body()
-    saa = False
-    if b"hasStorageAccess" in content or b"requestStorageAccess" in content:
-        saa = True
-    hashed = hash_sha1(content)
-    with open(create_path_from_hash(hashed), 'wb') as f:
-        f.write(content)
-    return hashed, saa
 
 
 class FrameHierarchy:
@@ -195,6 +177,11 @@ def store_site_data_db(frame: FrameHierarchy,
 
 
 class StorageAccessApi(Module):
+
+    def __init__(self, crawler) -> None:
+        super().__init__(crawler)
+        self.saa_found = False
+
     @staticmethod
     def register_job(log: Logger) -> None:
         log.info('Create tables for StorageAccessApi module')
@@ -217,7 +204,7 @@ class StorageAccessApi(Module):
             try:
                 # Check if response is a script and that it was not a redirect
                 if response.request.resource_type == 'script' and response.ok:
-                    script_hash, saa = store_and_hash_content(response)
+                    script_hash, saa = self.store_and_hash_content(response)
                     parent_list = [response.frame.url] + get_parent_frames(frame=response.frame)
                     parent_frame = self.top_level.find_child(parent_list)
                     if parent_frame is None:
@@ -229,10 +216,10 @@ class StorageAccessApi(Module):
                 elif response.request.resource_type == 'document' and response.ok:
                     # Check if the document is the top-level site or loaded in an iframe
                     if response.frame.parent_frame is None:
-                        document_hash, saa = store_and_hash_content(response)
+                        document_hash, saa = self.store_and_hash_content(response)
                         self.top_level = FrameHierarchy(url=response.url, sha1=document_hash, saa=saa)
                     else:
-                        document_hash, saa = store_and_hash_content(response)
+                        document_hash, saa = self.store_and_hash_content(response)
                         parent_list = get_parent_frames(frame=response.frame)
                         parent_frame = self.top_level.find_child(parent_list)
                         if parent_frame is None:
@@ -248,8 +235,9 @@ class StorageAccessApi(Module):
 
             :return: None
             """
-            # TODO only store if SAA was used on the site
-            store_site_data_db(self.top_level)
+            if self.saa_found:
+                store_site_data_db(self.top_level)
+            # TODO Delete files from file system for sites that were not stored in DB
 
         # Register response handler
         self.crawler.page.on("response", handle_response)
@@ -260,4 +248,31 @@ class StorageAccessApi(Module):
     def receive_response(self, responses: List[Optional[Response]], url: URL, final_url: str, start: List[datetime],
                          repetition: int) -> None:
         super().receive_response(responses, url, final_url, start, repetition)
+
+
+####### Module Helper Functions #######################################################################################
+
+
+    def store_and_hash_content(self, response: Response) -> (str, bool):
+        """
+        Stores the content of a response according to its hash and returns the hash.
+        Also performs string matching for SAA functions on content and updates the module field **saa_found**
+        if it matches.
+
+        :param response: Playwright Response object
+        :return: Hash of the stored content and boolean whether SAA function were found with string matching
+        """
+        content = response.body()
+        saa = False
+        if b"hasStorageAccess" in content or b"requestStorageAccess" in content:
+            saa = True
+            self.saa_found = True
+        hashed = hash_sha1(content)
+        try:
+            with open(create_path_from_hash(hashed), 'xb') as f:
+                f.write(content)
+        # If file exists do not write it again
+        except FileExistsError:
+            self.crawler.log.info(f"File with hash {hashed} already exists")
+        return hashed, saa
 
