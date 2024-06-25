@@ -5,7 +5,7 @@ from datetime import datetime
 from logging import Logger
 from typing import List, Optional
 
-from playwright.sync_api import Response, Frame
+from playwright.sync_api import Response, Frame, Page
 from peewee import ForeignKeyField, TextField, BooleanField, DateTimeField
 
 from database import URL, database, BaseModel, Task
@@ -147,6 +147,50 @@ class FrameHierarchy:
         return result
 
 
+def store_site_data_db(frame: FrameHierarchy,
+                       top_level_document: Document = None,
+                       parent_document_inclusion: DocumentInclusion = None):
+    """
+    Takes the frame hierarchy and recursively stores all collected information about the site in the database.
+    The content of the documents or scripts instead is stored in the file system beforehand
+    and the location can be retrieved through the hash. Example: **3f4a** has the path **./file_storage/3/f/4/a**
+
+    :param frame: Frame hierarchy
+    :param top_level_document: Top-level document DB object
+    :param parent_document_inclusion: Parent frame in the hierarchy
+    :return: None
+    """
+
+    document, created = Document.get_or_create(
+        sha1=frame.sha1,
+        defaults={'url': frame.url, 'saa': frame.saa}
+    )
+
+    document_inclusion = DocumentInclusion.create(
+        document=document,
+        top_level_site=top_level_document if top_level_document else document,
+        parent=parent_document_inclusion,
+        crawl_date=frame.visited
+    )
+
+    for script in frame.scripts:
+        script_obj, created = Script.get_or_create(
+            sha1=script['sha1'],
+            defaults={'url': script['url'], 'saa': script['saa']}
+        )
+        ScriptInclusion.create(
+            script=script_obj,
+            document_inclusion=document_inclusion
+        )
+
+    for child_url, child_frame in frame.children.items():
+        store_site_data_db(
+            child_frame,
+            top_level_document if top_level_document else document,
+            document_inclusion
+        )
+
+
 ####### Module Implementation #########################################################################################
 
 
@@ -204,8 +248,8 @@ class StorageAccessApi(Module):
 
             :return: None
             """
-            # TODO Store all the scripts and HTML documents if SAA is used
-            pass
+            # TODO only store if SAA was used on the site
+            store_site_data_db(self.top_level)
 
         # Register response handler
         self.crawler.page.on("response", handle_response)
