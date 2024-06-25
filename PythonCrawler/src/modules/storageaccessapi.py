@@ -82,18 +82,22 @@ def create_path_from_hash(hash_str: str) -> str:
     return file_path
 
 
-def store_and_hash_content(response: Response) -> str:
+def store_and_hash_content(response: Response) -> (str, bool):
     """
     Stores the content of a response according to its hash and returns the hash.
+    Also performs string matching for SAA functions on content.
 
     :param response: Playwright Response object
-    :return: Hash of the stored content
+    :return: Hash of the stored content and boolean whether SAA function were found with string matching
     """
     content = response.body()
+    saa = False
+    if b"hasStorageAccess" in content or b"requestStorageAccess" in content:
+        saa = True
     hashed = hash_sha1(content)
     with open(create_path_from_hash(hashed), 'wb') as f:
         f.write(content)
-    return hashed
+    return hashed, saa
 
 
 class FrameHierarchy:
@@ -102,12 +106,13 @@ class FrameHierarchy:
     all information about the frame, its documents, scripts and references to the children frames.
     """
 
-    def __init__(self, url, sha1):
+    def __init__(self, url, sha1, saa=False):
         self.url = url
         self.sha1 = sha1
         self.visited = datetime.now().now()
         self.children = {}
         self.scripts = []
+        self.saa = saa
 
     def add_children(self, child):
         self.children[child.url] = child
@@ -135,7 +140,7 @@ class FrameHierarchy:
         return self.string_helper()
 
     def string_helper(self, level=0) -> str:
-        result = "\t" * level + self.url + "\n" + "\t" * (level+1) + "Scripts: " + str(self.scripts) + "\n"
+        result = "\t" * level + self.url + " / saa: " + str(self.saa) + "\n" + "\t" * (level+1) + "Scripts: " + str(self.scripts) + "\n"
         if self.children is not None:
             for child in self.children.values():
                 result += child.string_helper(level=level + 1)
@@ -168,29 +173,27 @@ class StorageAccessApi(Module):
             try:
                 # Check if response is a script and that it was not a redirect
                 if response.request.resource_type == 'script' and response.ok:
-                    script_hash = store_and_hash_content(response)
+                    script_hash, saa = store_and_hash_content(response)
                     parent_list = [response.frame.url] + get_parent_frames(frame=response.frame)
                     parent_frame = self.top_level.find_child(parent_list)
                     if parent_frame is None:
                         raise Exception("Parent frame was not found!")
-                    # TODO Implement string matching to populate the SAA parameter
                     parent_frame.add_script({
-                        "sha1": script_hash, "url": response.url, "saa": False
+                        "sha1": script_hash, "url": response.url, "saa": saa
                     })
                 # Check if response is a document and that it was not a redirect
                 elif response.request.resource_type == 'document' and response.ok:
-                    # TODO Implement string matching to populate the SAA parameter
                     # Check if the document is the top-level site or loaded in an iframe
                     if response.frame.parent_frame is None:
-                        document_hash = store_and_hash_content(response)
-                        self.top_level = FrameHierarchy(url=response.url, sha1=document_hash)
+                        document_hash, saa = store_and_hash_content(response)
+                        self.top_level = FrameHierarchy(url=response.url, sha1=document_hash, saa=saa)
                     else:
-                        document_hash = store_and_hash_content(response)
+                        document_hash, saa = store_and_hash_content(response)
                         parent_list = get_parent_frames(frame=response.frame)
                         parent_frame = self.top_level.find_child(parent_list)
                         if parent_frame is None:
                             raise Exception("Parent frame was not found!")
-                        parent_frame.add_children(FrameHierarchy(url=response.url, sha1=document_hash))
+                        parent_frame.add_children(FrameHierarchy(url=response.url, sha1=document_hash, saa=saa))
             except Exception:
                 self.crawler.log.error(f"Error handling response {response.url}: {traceback.print_exc()}")
 
