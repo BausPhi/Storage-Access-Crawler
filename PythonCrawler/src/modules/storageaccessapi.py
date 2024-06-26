@@ -42,17 +42,22 @@ class ScriptInclusion(BaseModel):
 ####### Helper Functions ##############################################################################################
 
 
-def get_parent_frames(frame: Frame) -> List[str]:
+def get_parent_frames(frame: Frame, script_frame: Frame = None) -> List[str]:
     """
     Get a list of all parent frames from a Playwright frame instance.
 
     :param frame: Playwright Frame object
+    :param script_frame: Script frame that need to be prepended
     :return: List of parent frames
     """
-    parent_list = []
+    if script_frame is not None and script_frame.url != "about:blank":
+        parent_list = [script_frame.url.split("#")[0]]
+    else:
+        parent_list = []
     while frame.parent_frame is not None:
         frame = frame.parent_frame
-        parent_list.append(frame.url)
+        if frame.url != "about:blank":
+            parent_list.append(frame.url.split("#")[0])
     return parent_list
 
 
@@ -228,7 +233,7 @@ class StorageAccessApi(Module):
                 # Check if response is a script and that it was not a redirect
                 if response.request.resource_type == 'script' and response.ok:
                     script_hash, script_content, saa = self.hash_content(response)
-                    parent_list = [response.frame.url] + get_parent_frames(frame=response.frame)
+                    parent_list = get_parent_frames(frame=response.frame, script_frame=response.frame)
                     parent_frame = self.top_level.find_child(parent_list)
                     if parent_frame is None:
                         raise Exception("Parent frame was not found!")
