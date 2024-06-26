@@ -82,15 +82,33 @@ def create_path_from_hash(hash_str: str) -> str:
     return file_path
 
 
+def store_file(hashed: str, content: bytes, logger: Logger):
+    """
+    Stores the content of a document or script in the file system.
+
+    :param hashed: Hash of the document or script
+    :param content: Content of the document or script
+    :param logger: Logger object to log to the crawler logs
+    :return: None
+    """
+    try:
+        with open(create_path_from_hash(hashed), 'xb') as f:
+            f.write(content)
+    # If file exists do not write it again
+    except FileExistsError:
+        logger.info(f"File with hash {hashed} already exists")
+
+
 class FrameHierarchy:
     """
     The class is used to build a frame hierarchy of the iframes loaded on the currently crawled site by containing
     all information about the frame, its documents, scripts and references to the children frames.
     """
 
-    def __init__(self, url, sha1, saa=False):
+    def __init__(self, url, sha1, content, saa):
         self.url = url
         self.sha1 = sha1
+        self.content = content
         self.visited = datetime.now().now()
         self.children = {}
         self.scripts = []
@@ -122,7 +140,7 @@ class FrameHierarchy:
         return self.string_helper()
 
     def string_helper(self, level=0) -> str:
-        result = "\t" * level + self.url + " / saa: " + str(self.saa) + "\n" + "\t" * (level+1) + "Scripts: " + str(self.scripts) + "\n"
+        result = "\t" * level + self.url + " / saa: " + str(self.saa) + "\n"
         if self.children is not None:
             for child in self.children.values():
                 result += child.string_helper(level=level + 1)
@@ -130,6 +148,7 @@ class FrameHierarchy:
 
 
 def store_site_data_db(frame: FrameHierarchy,
+                       logger: Logger,
                        top_level_document: Document = None,
                        parent_document_inclusion: DocumentInclusion = None):
     """
@@ -138,6 +157,7 @@ def store_site_data_db(frame: FrameHierarchy,
     and the location can be retrieved through the hash. Example: **3f4a** has the path **./file_storage/3/f/4/a**
 
     :param frame: Frame hierarchy
+    :param logger: Logging instance to write to the crawler logs
     :param top_level_document: Top-level document DB object
     :param parent_document_inclusion: Parent frame in the hierarchy
     :return: None
@@ -147,6 +167,7 @@ def store_site_data_db(frame: FrameHierarchy,
         sha1=frame.sha1,
         defaults={'url': frame.url, 'saa': frame.saa}
     )
+    store_file(frame.sha1, frame.content, logger)
 
     document_inclusion = DocumentInclusion.create(
         document=document,
@@ -160,6 +181,7 @@ def store_site_data_db(frame: FrameHierarchy,
             sha1=script['sha1'],
             defaults={'url': script['url'], 'saa': script['saa']}
         )
+        store_file(script['sha1'], script['content'], logger)
         ScriptInclusion.create(
             script=script_obj,
             document_inclusion=document_inclusion
@@ -168,6 +190,7 @@ def store_site_data_db(frame: FrameHierarchy,
     for child_url, child_frame in frame.children.items():
         store_site_data_db(
             child_frame,
+            logger,
             top_level_document if top_level_document else document,
             document_inclusion
         )
@@ -204,29 +227,31 @@ class StorageAccessApi(Module):
             try:
                 # Check if response is a script and that it was not a redirect
                 if response.request.resource_type == 'script' and response.ok:
-                    script_hash, saa = self.store_and_hash_content(response)
+                    script_hash, script_content, saa = self.hash_content(response)
                     parent_list = [response.frame.url] + get_parent_frames(frame=response.frame)
                     parent_frame = self.top_level.find_child(parent_list)
                     if parent_frame is None:
                         raise Exception("Parent frame was not found!")
                     parent_frame.add_script({
-                        "sha1": script_hash, "url": response.url, "saa": saa
+                        "sha1": script_hash, "url": response.url, "content": script_content, "saa": saa
                     })
                 # Check if response is a document and that it was not a redirect
                 elif response.request.resource_type == 'document' and response.ok:
                     # Check if the document is the top-level site or loaded in an iframe
                     if response.frame.parent_frame is None:
-                        document_hash, saa = self.store_and_hash_content(response)
-                        self.top_level = FrameHierarchy(url=response.url, sha1=document_hash, saa=saa)
+                        document_hash, document_content, saa = self.hash_content(response)
+                        self.top_level = FrameHierarchy(url=response.url, sha1=document_hash,
+                                                        content=document_content, saa=saa)
                     else:
-                        document_hash, saa = self.store_and_hash_content(response)
+                        document_hash, document_content, saa = self.hash_content(response)
                         parent_list = get_parent_frames(frame=response.frame)
                         parent_frame = self.top_level.find_child(parent_list)
                         if parent_frame is None:
                             raise Exception("Parent frame was not found!")
-                        parent_frame.add_children(FrameHierarchy(url=response.url, sha1=document_hash, saa=saa))
+                        parent_frame.add_children(FrameHierarchy(url=response.url, sha1=document_hash,
+                                                                 content=document_content, saa=saa))
             except Exception:
-                self.crawler.log.error(f"Error handling response {response.url}: {traceback.print_exc()}")
+                self.crawler.log.error(f"Error handling response {response.url}: {traceback.format_exc()}")
 
         def store_collected_data():
             """
@@ -236,8 +261,7 @@ class StorageAccessApi(Module):
             :return: None
             """
             if self.saa_found:
-                store_site_data_db(self.top_level)
-            # TODO Delete files from file system for sites that were not stored in DB
+                store_site_data_db(self.top_level, logger=self.crawler.log)
 
         # Register response handler
         self.crawler.page.on("response", handle_response)
@@ -253,14 +277,14 @@ class StorageAccessApi(Module):
 ####### Module Helper Functions #######################################################################################
 
 
-    def store_and_hash_content(self, response: Response) -> (str, bool):
+    def hash_content(self, response: Response) -> (str, bytes, bool):
         """
-        Stores the content of a response according to its hash and returns the hash.
+        Calculates the hash of a script or document and returns the hash and the content.
         Also performs string matching for SAA functions on content and updates the module field **saa_found**
-        if it matches.
+        if it matches and returns a third value that indicates whether SAA was used in the document or script.
 
         :param response: Playwright Response object
-        :return: Hash of the stored content and boolean whether SAA function were found with string matching
+        :return: Hash and content of the Response, whether SAA function were found with string matching
         """
         content = response.body()
         saa = False
@@ -268,11 +292,5 @@ class StorageAccessApi(Module):
             saa = True
             self.saa_found = True
         hashed = hash_sha1(content)
-        try:
-            with open(create_path_from_hash(hashed), 'xb') as f:
-                f.write(content)
-        # If file exists do not write it again
-        except FileExistsError:
-            self.crawler.log.info(f"File with hash {hashed} already exists")
-        return hashed, saa
+        return hashed, content, saa
 
