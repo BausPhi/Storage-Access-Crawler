@@ -30,7 +30,7 @@ class Config:
     SAME_ORIGIN: bool = False  # URL discovery for same-origin only
     SAME_ETLDP1: bool = True  # URL discovery for same ETLD+1 only
     DEPTH: int = 2  # URL discovery limit; 0 (initial URL only), 1 (+ all URLs landing page), etc.
-    MAX_URLS: int = 1000  # limit number of URLs gathered for a task
+    MAX_URLS: int = 5  # limit number of URLs gathered for a task
 
     REPETITIONS: int = 1  # how many times to crawl the same URL and invoke module response handlers
 

@@ -7,10 +7,20 @@ export DISPLAY=:99
 export PYTHONPATH=/pycrawler
 
 # Go to pycrawler directory
-cd /pycrawler/
+cd /pycrawler/ || exit
+
+# Download tranco ranking
+mkdir -p ./experiment/ranking
+if [ ! -f "./experiment/ranking/tranco.csv" ]; then
+    echo "Starting download of Tranco ranking!"
+    curl -o ./experiment/ranking/tranco.csv https://tranco-list.eu/download/4Q39X/full
+    echo "Tranco ranking successfully downloaded!"
+else
+    echo "Tranco ranking already downloaded!"
+fi
 
 # Populate DB with URLs to crawl
-python3 ./experiment/experiment_storage_access_api.py -j storageaccessapi
+python3 ./experiment/experiment_storage_access_api.py -j storageaccessapi -r ./experiment/ranking/tranco.csv
 
 echo "Experiment storageaccessapi starting"
 
