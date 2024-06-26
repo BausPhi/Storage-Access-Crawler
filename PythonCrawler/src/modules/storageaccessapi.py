@@ -232,11 +232,12 @@ class StorageAccessApi(Module):
             try:
                 # Check if response is a script and that it was not a redirect
                 if response.request.resource_type == 'script' and response.ok:
+                    response.frame.wait_for_load_state()
                     script_hash, script_content, saa = self.hash_content(response)
                     parent_list = get_parent_frames(frame=response.frame, script_frame=response.frame)
                     parent_frame = self.top_level.find_child(parent_list)
                     if parent_frame is None:
-                        raise Exception("Parent frame was not found!")
+                        raise Exception(f"Script frame was not found!: {parent_list} - {self.top_level}")
                     parent_frame.add_script({
                         "sha1": script_hash, "url": response.url, "content": script_content, "saa": saa
                     })
@@ -252,7 +253,7 @@ class StorageAccessApi(Module):
                         parent_list = get_parent_frames(frame=response.frame)
                         parent_frame = self.top_level.find_child(parent_list)
                         if parent_frame is None:
-                            raise Exception("Parent frame was not found!")
+                            raise Exception(f"Document frame was not found!: {parent_list} - {self.top_level}")
                         parent_frame.add_children(FrameHierarchy(url=response.url, sha1=document_hash,
                                                                  content=document_content, saa=saa))
             except Exception:
