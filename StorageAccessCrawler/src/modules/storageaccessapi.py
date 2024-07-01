@@ -1,5 +1,6 @@
 import hashlib
 import os
+import time
 import traceback
 from datetime import datetime
 from logging import Logger
@@ -235,14 +236,14 @@ class StorageAccessApi(Module):
                 if ((response.request.resource_type == 'script' or response.request.resource_type == 'document')
                         and response.ok):
                     # Wait until the DOM content of every parent frame was loaded
-                    frame = response.frame
+                    frame = response.frame.parent_frame
                     # Exclude dynamically added scripts as the "domcontentloaded" state would never be reached
                     while frame is not None and frame.url != "":
                         frame.wait_for_load_state("domcontentloaded")
                         frame = frame.parent_frame
 
                 # Check if response is a script and that it was not a redirect
-                if response.request.resource_type == 'script' and response.ok:
+                if response.request.resource_type == 'script':
                     script_hash, script_content, saa = self.hash_content(response)
                     parent_list = get_parent_frames(frame=response.frame, script_frame=response.frame)
                     parent_frame = self.top_level.find_child(parent_list)
@@ -252,7 +253,7 @@ class StorageAccessApi(Module):
                         "sha1": script_hash, "url": response.url, "content": script_content, "saa": saa
                     })
                 # Check if response is a document and that it was not a redirect
-                elif response.request.resource_type == 'document' and response.ok:
+                elif response.request.resource_type == 'document':
                     # Check if the document is the top-level site or loaded in an iframe
                     if response.frame.parent_frame is None:
                         document_hash, document_content, saa = self.hash_content(response)
