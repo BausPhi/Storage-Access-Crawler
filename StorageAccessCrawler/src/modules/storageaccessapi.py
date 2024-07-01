@@ -5,7 +5,7 @@ from datetime import datetime
 from logging import Logger
 from typing import List, Optional
 
-from playwright.sync_api import Response, Frame
+from playwright.sync_api import Response, Frame, Request
 from peewee import ForeignKeyField, TextField, BooleanField, DateTimeField
 
 from database import URL, database, BaseModel, Task
@@ -230,9 +230,17 @@ class StorageAccessApi(Module):
             :return: None
             """
             try:
+                if ((response.request.resource_type == 'script' or response.request.resource_type == 'document')
+                        and response.ok):
+                    # Wait until the DOM content of every parent frame was loaded
+                    frame = response.frame
+                    # Exclude dynamically added scripts as the "domcontentloaded" state would never be reached
+                    while frame is not None and frame.url != "":
+                        frame.wait_for_load_state("domcontentloaded")
+                        frame = frame.parent_frame
+
                 # Check if response is a script and that it was not a redirect
                 if response.request.resource_type == 'script' and response.ok:
-                    response.frame.wait_for_load_state()
                     script_hash, script_content, saa = self.hash_content(response)
                     parent_list = get_parent_frames(frame=response.frame, script_frame=response.frame)
                     parent_frame = self.top_level.find_child(parent_list)
