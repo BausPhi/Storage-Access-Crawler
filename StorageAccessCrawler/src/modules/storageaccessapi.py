@@ -56,7 +56,7 @@ def get_parent_frames(frame: Frame, script_frame: Frame = None) -> List[str]:
         parent_list = []
     while frame.parent_frame is not None:
         frame = frame.parent_frame
-        if frame.url != "about:blank":
+        if frame.url != "about:blank" and frame.url != "about:srcdoc":
             parent_list.append(frame.url.split("#")[0])
     return parent_list
 
@@ -136,6 +136,8 @@ class FrameHierarchy:
         try:
             curr_frame = self
             for parent in reversed(parent_list[:-1]):
+                if parent == "" or parent == "about:srcdoc" or parent == "about:blank":
+                    continue
                 curr_frame = curr_frame.children[parent]
             return curr_frame
         except KeyError:
