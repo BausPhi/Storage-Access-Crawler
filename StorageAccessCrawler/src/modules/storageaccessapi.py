@@ -238,6 +238,10 @@ class StorageAccessApi(Module):
             :return: None
             """
             try:
+                # Do not handle responses with specific status code
+                if response.status in [204, 404]:
+                    return
+
                 # Check if response is a script and that it was not a redirect
                 if response.request.resource_type == 'script':
                     script_hash, script_content, saa = self.hash_content(response)
