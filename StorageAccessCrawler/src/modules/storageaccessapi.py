@@ -1,6 +1,5 @@
 import hashlib
 import os
-import time
 import traceback
 from datetime import datetime
 from logging import Logger
@@ -43,7 +42,7 @@ class ScriptInclusion(BaseModel):
 ####### Helper Functions ##############################################################################################
 
 
-def get_parent_frames(frame: Frame, script_frame: Frame = None) -> List[str]:
+def get_parent_frames(frame: Frame, script_frame: bool = False) -> List[str]:
     """
     Get a list of all parent frames from a Playwright frame instance.
 
@@ -51,14 +50,12 @@ def get_parent_frames(frame: Frame, script_frame: Frame = None) -> List[str]:
     :param script_frame: Script frame that need to be prepended
     :return: List of parent frames
     """
-    if script_frame is not None and script_frame.url != "about:blank":
-        parent_list = [script_frame.url.split("#")[0]]
-    else:
-        parent_list = []
+    parent_list = []
+    if script_frame:
+        parent_list = [frame.url.split("#")[0]]
     while frame.parent_frame is not None:
         frame = frame.parent_frame
-        if frame.url != "about:blank" and frame.url != "about:srcdoc":
-            parent_list.append(frame.url.split("#")[0])
+        parent_list.append(frame.url.split("#")[0])
     return parent_list
 
 
@@ -121,7 +118,14 @@ class FrameHierarchy:
         self.saa = saa
 
     def add_children(self, child):
-        self.children[child.url] = child
+        if child.url in self.children:
+            children = self.children[child.url].children
+            scripts = self.children[child.url].scripts
+            self.children[child.url] = child
+            self.children[child.url].children = children
+            self.children[child.url].scripts = scripts
+        else:
+            self.children[child.url] = child
 
     def add_script(self, script):
         self.scripts.append(script)
@@ -134,15 +138,16 @@ class FrameHierarchy:
         :param parent_list: List of all parents of the frame
         :return: The found FrameHierarchy instance - None if not found
         """
-        try:
-            curr_frame = self
-            for parent in reversed(parent_list[:-1]):
-                if parent == "" or parent == "about:srcdoc" or parent == "about:blank":
-                    continue
+        curr_frame = self
+        for parent in reversed(parent_list[:-1]):
+            if parent == "" or parent == "about:srcdoc" or parent == "about:blank":
+                continue
+            if parent in curr_frame.children:
                 curr_frame = curr_frame.children[parent]
-            return curr_frame
-        except KeyError:
-            return None
+            else:
+                curr_frame.add_children(FrameHierarchy(url=parent, sha1=None, content=None, saa=False))
+                curr_frame = curr_frame.children[parent]
+        return curr_frame
 
     def __str__(self) -> str:
         return self.string_helper()
@@ -233,22 +238,11 @@ class StorageAccessApi(Module):
             :return: None
             """
             try:
-                if ((response.request.resource_type == 'script' or response.request.resource_type == 'document')
-                        and response.ok):
-                    # Wait until the DOM content of every parent frame was loaded
-                    frame = response.frame.parent_frame
-                    # Exclude dynamically added scripts as the "domcontentloaded" state would never be reached
-                    while frame is not None and frame.url != "":
-                        frame.wait_for_load_state("domcontentloaded")
-                        frame = frame.parent_frame
-
                 # Check if response is a script and that it was not a redirect
                 if response.request.resource_type == 'script':
                     script_hash, script_content, saa = self.hash_content(response)
-                    parent_list = get_parent_frames(frame=response.frame, script_frame=response.frame)
+                    parent_list = get_parent_frames(frame=response.frame, script_frame=True)
                     parent_frame = self.top_level.find_child(parent_list)
-                    if parent_frame is None:
-                        raise Exception(f"Script frame was not found!: {parent_list} - {self.top_level}")
                     parent_frame.add_script({
                         "sha1": script_hash, "url": response.url, "content": script_content, "saa": saa
                     })
@@ -263,8 +257,6 @@ class StorageAccessApi(Module):
                         document_hash, document_content, saa = self.hash_content(response)
                         parent_list = get_parent_frames(frame=response.frame)
                         parent_frame = self.top_level.find_child(parent_list)
-                        if parent_frame is None:
-                            raise Exception(f"Document frame was not found!: {parent_list} - {self.top_level}")
                         parent_frame.add_children(FrameHierarchy(url=response.url, sha1=document_hash,
                                                                  content=document_content, saa=saa))
             except Exception:
