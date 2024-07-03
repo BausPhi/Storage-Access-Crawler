@@ -42,3 +42,6 @@ class Config:
     # Usually the code of the response in DB will be the response status (200, 404, etc.); if an
     # error occurs, for example response is NULL or browser is stuck, use the error codes below
     ERROR_CODES: Dict[str, int] = {'response_error': -1, 'browser_error': -2}
+
+    # Words used for string matching to find SAA usage
+    STRING_MATCHING: list[bytes] = [b'hasStorageAccess', b'requestStorageAccess']

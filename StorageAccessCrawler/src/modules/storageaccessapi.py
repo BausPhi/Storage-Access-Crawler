@@ -1,6 +1,7 @@
 import hashlib
 import os
 import traceback
+from config import Config
 from datetime import datetime
 from logging import Logger
 from typing import List, Optional
@@ -301,9 +302,10 @@ class StorageAccessApi(Module):
         """
         content = response.body()
         saa = False
-        if b"hasStorageAccess" in content or b"requestStorageAccess" in content:
-            saa = True
-            self.saa_found = True
+        for word in Config.STRING_MATCHING:
+            if word in content:
+                saa = True
+                self.saa_found = True
         hashed = hash_sha1(content)
         return hashed, content, saa
 
