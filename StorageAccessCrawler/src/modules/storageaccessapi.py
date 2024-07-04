@@ -242,7 +242,7 @@ class StorageAccessApi(Module):
             """
             try:
                 # Do not handle responses with specific status code
-                if response.status in [204, 404]:
+                if response.status in [204, 404, 301, 302, 307, 308]:
                     return
 
                 # Check if response is a script and that it was not a redirect
