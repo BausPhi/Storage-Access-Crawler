@@ -6,7 +6,7 @@ from datetime import datetime
 from logging import Logger
 from typing import List, Optional
 
-from playwright.sync_api import Response, Frame, Request
+from playwright.sync_api import Response, Frame
 from peewee import ForeignKeyField, TextField, BooleanField, DateTimeField
 
 from database import URL, database, BaseModel, Task
@@ -242,7 +242,7 @@ class StorageAccessApi(Module):
             """
             try:
                 # Do not handle responses with specific status code
-                if response.status in [204, 404, 301, 302, 307, 308]:
+                if not response.ok or response.status == 204:
                     return
 
                 # Check if response is a script and that it was not a redirect
