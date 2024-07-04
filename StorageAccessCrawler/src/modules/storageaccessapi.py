@@ -218,6 +218,8 @@ class StorageAccessApi(Module):
     def __init__(self, crawler) -> None:
         super().__init__(crawler)
         self.saa_found = False
+        self.top_level = FrameHierarchy(url="", sha1=None,
+                                        content=None, saa=None)
 
     @staticmethod
     def register_job(log: Logger) -> None:
@@ -256,8 +258,11 @@ class StorageAccessApi(Module):
                     # Check if the document is the top-level site or loaded in an iframe
                     if response.frame.parent_frame is None:
                         document_hash, document_content, saa = self.hash_content(response)
+                        stored_scripts, stored_children = self.top_level.scripts, self.top_level.children
                         self.top_level = FrameHierarchy(url=response.url, sha1=document_hash,
                                                         content=document_content, saa=saa)
+                        self.top_level.children = stored_children
+                        self.top_level.scripts = stored_scripts
                     else:
                         document_hash, document_content, saa = self.hash_content(response)
                         parent_list = get_parent_frames(frame=response.frame)
