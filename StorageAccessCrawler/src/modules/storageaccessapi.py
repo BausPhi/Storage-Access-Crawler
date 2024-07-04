@@ -146,7 +146,7 @@ class FrameHierarchy:
             if parent in curr_frame.children:
                 curr_frame = curr_frame.children[parent]
             else:
-                curr_frame.add_children(FrameHierarchy(url=parent, sha1=None, content=None, saa=False))
+                curr_frame.add_children(FrameHierarchy(url=parent, sha1="undefined", content=b"undefined", saa=False))
                 curr_frame = curr_frame.children[parent]
         return curr_frame
 
@@ -218,8 +218,8 @@ class StorageAccessApi(Module):
     def __init__(self, crawler) -> None:
         super().__init__(crawler)
         self.saa_found = False
-        self.top_level = FrameHierarchy(url="", sha1=None,
-                                        content=None, saa=None)
+        self.top_level = FrameHierarchy(url="", sha1="undefined",
+                                        content=b"undefined", saa=None)
 
     @staticmethod
     def register_job(log: Logger) -> None:
