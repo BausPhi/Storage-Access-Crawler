@@ -32,7 +32,7 @@ class Script(BaseModel):
 class DocumentInclusion(BaseModel):
     document = ForeignKeyField(Document, backref="document_inclusions")
     top_level_site = ForeignKeyField(Document)
-    parent = ForeignKeyField("self", null=True, backref="children")  # Top-level if parent is 'null'
+    parent = ForeignKeyField("self", null=True, backref="children")  # Top-level if parent is "null"
     crawl_date = DateTimeField()
 
 
@@ -97,7 +97,7 @@ def store_file(hashed: str, content: bytes, logger: Logger):
     :return: None
     """
     try:
-        with open(create_path_from_hash(hashed), 'xb') as f:
+        with open(create_path_from_hash(hashed), "xb") as f:
             f.write(content)
     # If file exists do not write it again
     except FileExistsError:
@@ -181,7 +181,7 @@ def store_site_data_db(frame: FrameHierarchy,
 
     document, created = Document.get_or_create(
         sha1=frame.sha1,
-        defaults={'url': frame.url, 'saa': frame.saa}
+        defaults={"url": frame.url, "saa": frame.saa}
     )
     store_file(frame.sha1, frame.content, logger)
 
@@ -194,10 +194,10 @@ def store_site_data_db(frame: FrameHierarchy,
 
     for script in frame.scripts:
         script_obj, created = Script.get_or_create(
-            sha1=script['sha1'],
-            defaults={'url': script['url'], 'saa': script['saa']}
+            sha1=script["sha1"],
+            defaults={"url": script["url"], "saa": script["saa"]}
         )
-        store_file(script['sha1'], script['content'], logger)
+        store_file(script["sha1"], script["content"], logger)
         ScriptInclusion.create(
             script=script_obj,
             document_inclusion=document_inclusion
@@ -225,7 +225,7 @@ class StorageAccessApi(Module):
 
     @staticmethod
     def register_job(log: Logger) -> None:
-        log.info('Create tables for StorageAccessApi module')
+        log.info("Create tables for StorageAccessApi module")
         with database:
             database.create_tables([Document, DocumentInclusion, Script, ScriptInclusion])
 
@@ -248,7 +248,7 @@ class StorageAccessApi(Module):
                     return
 
                 # Check if response is a script and that it was not a redirect
-                if response.request.resource_type == 'script':
+                if response.request.resource_type == "script":
                     script_hash, script_content, saa = self.hash_content(response)
                     parent_list = get_parent_frames(frame=response.frame, script_frame=True)
                     parent_frame = self.top_level.find_child(parent_list)
@@ -256,7 +256,7 @@ class StorageAccessApi(Module):
                         "sha1": script_hash, "url": response.url, "content": script_content, "saa": saa
                     })
                 # Check if response is a document and that it was not a redirect
-                elif response.request.resource_type == 'document':
+                elif response.request.resource_type == "document":
                     # Check if the document is the top-level site or loaded in an iframe
                     if response.frame.parent_frame is None:
                         document_hash, document_content, saa = self.hash_content(response)
@@ -291,7 +291,7 @@ class StorageAccessApi(Module):
             if self.saa_found:
                 store_site_data_db(self.top_level, logger=self.crawler.log)
 
-        # Register response handler
+        # Register response handler to intercept documents and scripts
         self.crawler.page.on("response", handle_response)
         # Register closing handler that executes before the site is changed
         # Crawler waits until the handler finished executing
