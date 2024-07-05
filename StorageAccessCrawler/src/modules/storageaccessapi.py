@@ -7,6 +7,7 @@ from logging import Logger
 from typing import List, Optional
 
 from playwright.sync_api import Response, Frame
+from playwright._impl._errors import TargetClosedError, Error
 from peewee import ForeignKeyField, TextField, BooleanField, DateTimeField
 
 from database import URL, database, BaseModel, Task
@@ -100,7 +101,8 @@ def store_file(hashed: str, content: bytes, logger: Logger):
             f.write(content)
     # If file exists do not write it again
     except FileExistsError:
-        logger.info(f"File with hash {hashed} already exists")
+        pass
+        # logger.info(f"File with hash {hashed} already exists")
 
 
 class FrameHierarchy:
@@ -269,6 +271,13 @@ class StorageAccessApi(Module):
                         parent_frame = self.top_level.find_child(parent_list)
                         parent_frame.add_children(FrameHierarchy(url=response.url, sha1=document_hash,
                                                                  content=document_content, saa=saa))
+            except TargetClosedError:
+                self.crawler.log.debug(f"Problem handling response {response.url}: Target page was already closed")
+            except Error as e:
+                if "identifier" in e.message:
+                    self.crawler.log.debug(
+                        f"Problem handling response {response.url}: Page was redirected, response not available"
+                    )
             except Exception:
                 self.crawler.log.error(f"Error handling response {response.url}: {traceback.format_exc()}")
 
