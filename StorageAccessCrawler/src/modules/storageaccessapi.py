@@ -1,5 +1,7 @@
 import hashlib
 import os
+import random
+import string
 import traceback
 from config import Config
 from datetime import datetime
@@ -281,6 +283,36 @@ class StorageAccessApi(Module):
             except Exception:
                 self.crawler.log.error(f"Error handling response {response.url}: {traceback.format_exc()}")
 
+        def perform_user_actions():
+            """
+            Performs random user actions to increase the probability of triggering SAA functions. This is done because
+            if no access was granted to the site before, requests must be preceded by a user interaction in order to get
+            access. Therefore, sites might only call the API after a user interaction. Also, this might yield
+            better crawl results.
+
+            :return: None
+            """
+            try:
+                # Get viewport dimensions
+                viewport = self.crawler.page.viewport_size
+                width, height = viewport["width"], viewport["height"]
+
+                # Make a random mouse click
+                self.crawler.page.mouse.click(x=random.randint(0, width - 1), y=random.randint(0, height - 1),
+                                              button="left", delay=10)
+
+                # Scroll for random amount
+                self.crawler.page.evaluate(f"window.scrollBy(0, {random.randint(0, 200)});")
+                self.crawler.page.evaluate(f"window.scrollBy({random.randint(0, 200)}, 0);")
+
+                # Press random keys
+                keys = (list(string.ascii_lowercase) + list(string.digits) +
+                        ["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Enter"])
+                for _ in range(random.randint(0, 5)):
+                    self.crawler.page.keyboard.press(random.choice(keys))
+            except Exception:
+                self.crawler.log.error(f"Some user interaction failed: {traceback.format_exc()}")
+
         def store_collected_data():
             """
             Stores all the retrieved information about the documents, scripts and their frames in the database.
@@ -296,6 +328,8 @@ class StorageAccessApi(Module):
         # Register closing handler that executes before the site is changed
         # Crawler waits until the handler finished executing
         self.crawler.page.on("close", store_collected_data)
+        # Perform random user actions once the page finished loading
+        self.crawler.page.on("load", perform_user_actions)
 
     def receive_response(self, responses: List[Optional[Response]], url: URL, final_url: str, start: List[datetime],
                          repetition: int) -> None:
