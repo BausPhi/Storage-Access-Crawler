@@ -23,6 +23,7 @@ class Document(BaseModel):
     sha1 = TextField(unique=True)
     url = TextField()
     saa = BooleanField(default=False)
+    site = TextField()
 
 
 class Script(BaseModel):
@@ -35,7 +36,6 @@ class DocumentInclusion(BaseModel):
     document = ForeignKeyField(Document, backref="document_inclusions")
     top_level_site = ForeignKeyField(Document)
     parent = ForeignKeyField("self", null=True, backref="children")  # Top-level if parent is "null"
-    crawl_date = DateTimeField()
 
 
 class ScriptInclusion(BaseModel):
@@ -167,6 +167,7 @@ class FrameHierarchy:
 
 def store_site_data_db(frame: FrameHierarchy,
                        logger: Logger,
+                       site: str,
                        top_level_document: Document = None,
                        parent_document_inclusion: DocumentInclusion = None):
     """
@@ -176,14 +177,14 @@ def store_site_data_db(frame: FrameHierarchy,
 
     :param frame: Frame hierarchy
     :param logger: Logging instance to write to the crawler logs
+    :param site: Domain of the site that was crawled
     :param top_level_document: Top-level document DB object
     :param parent_document_inclusion: Parent frame in the hierarchy
     :return: None
     """
-
     document, created = Document.get_or_create(
         sha1=frame.sha1,
-        defaults={"url": frame.url, "saa": frame.saa}
+        defaults={"url": frame.url, "saa": frame.saa, "site": site}
     )
     store_file(frame.sha1, frame.content, logger)
 
@@ -209,6 +210,7 @@ def store_site_data_db(frame: FrameHierarchy,
         store_site_data_db(
             child_frame,
             logger,
+            site,
             top_level_document if top_level_document else document,
             document_inclusion
         )
@@ -321,7 +323,7 @@ class StorageAccessApi(Module):
             :return: None
             """
             if self.saa_found:
-                store_site_data_db(self.top_level, logger=self.crawler.log)
+                store_site_data_db(self.top_level, logger=self.crawler.log, site=url.site)
 
         # Register response handler to intercept documents and scripts
         self.crawler.page.on("response", handle_response)
