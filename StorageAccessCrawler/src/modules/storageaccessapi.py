@@ -81,38 +81,38 @@ def hash_sha1(x: bytes) -> str:
     return hashlib.sha1(x).hexdigest()
 
 
-def create_path_from_hash(hash_str: str) -> str:
+def create_path_from_hash(hash_str: str, file_name: str) -> str:
     """
     Creates and returns a file system path according to a given document or script hash.
     For a script with the hash **3f4a** the path **./file_storage/3/f/4/a** would be created and returned.
 
+    :param file_name: Name of the file we want to store
     :param hash_str: Hash of the file we want to store
     :return: Created file path
     """
-    dir_path_parts = list(hash_str[:-1])
-    file_name = hash_str[-1]
+    dir_path_parts = list(hash_str)
     dir_path = os.path.join("./file_storage/", *dir_path_parts)
     os.makedirs(dir_path, exist_ok=True)
     file_path = os.path.join(dir_path, file_name)
     return file_path
 
 
-def store_file(hashed: str, content: bytes, logger: Logger):
+def store_file(hashed: str, content: bytes, name: str):
     """
     Stores the content of a document or script in the file system.
 
     :param hashed: Hash of the document or script
     :param content: Content of the document or script
-    :param logger: Logger object to log to the crawler logs
+    :param name: Name of the resource file
     :return: None
     """
     try:
-        with open(create_path_from_hash(hashed), "xb") as f:
+        print(hashed, create_path_from_hash(hashed, name))
+        with open(create_path_from_hash(hashed, name), "xb") as f:
             f.write(content)
     # If file exists do not write it again
     except FileExistsError:
         pass
-        # logger.info(f"File with hash {hashed} already exists")
 
 
 class FrameHierarchy:
@@ -195,7 +195,7 @@ def store_site_data_db(frame: FrameHierarchy,
         url=frame.url,
         defaults={"saa": frame.saa}
     )
-    store_file(frame.sha1, frame.content, logger)
+    store_file(frame.sha1, frame.content, str(document.id))
 
     document_inclusion = DocumentInclusion.create(
         document=document,
@@ -210,7 +210,7 @@ def store_site_data_db(frame: FrameHierarchy,
             url=script["url"],
             defaults={"saa": script["saa"]}
         )
-        store_file(script["sha1"], script["content"], logger)
+        store_file(script["sha1"], script["content"], str(script_obj.id))
         ScriptInclusion.create(
             script=script_obj,
             top_level_site=top_level_document if top_level_document else document,
