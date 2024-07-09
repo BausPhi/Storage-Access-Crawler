@@ -325,7 +325,7 @@ class StorageAccessApi(Module):
                 for _ in range(random.randint(0, 5)):
                     self.crawler.page.keyboard.press(random.choice(keys))
             except Exception:
-                self.crawler.log.error(f"Some user interaction failed: {traceback.format_exc()}")
+                self.crawler.log.info(f"Some user interaction failed!")
 
         def store_collected_data():
             """
