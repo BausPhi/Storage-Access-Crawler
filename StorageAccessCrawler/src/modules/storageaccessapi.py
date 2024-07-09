@@ -23,7 +23,6 @@ class Document(BaseModel):
     sha1 = TextField(unique=True)
     url = TextField()
     saa = BooleanField(default=False)
-    site = TextField()
 
 
 class Script(BaseModel):
@@ -36,11 +35,14 @@ class DocumentInclusion(BaseModel):
     document = ForeignKeyField(Document, backref="document_inclusions")
     top_level_site = ForeignKeyField(Document)
     parent = ForeignKeyField("self", null=True, backref="children")  # Top-level if parent is "null"
+    site = TextField()
 
 
 class ScriptInclusion(BaseModel):
     script = ForeignKeyField(Script, backref="script_inclusions")
+    top_level_site = ForeignKeyField(Document)
     document_inclusion = ForeignKeyField(DocumentInclusion, backref="script_inclusions")
+    site = TextField()
 
 
 ####### Helper Functions ##############################################################################################
@@ -184,7 +186,7 @@ def store_site_data_db(frame: FrameHierarchy,
     """
     document, created = Document.get_or_create(
         sha1=frame.sha1,
-        defaults={"url": frame.url, "saa": frame.saa, "site": site}
+        defaults={"url": frame.url, "saa": frame.saa}
     )
     store_file(frame.sha1, frame.content, logger)
 
@@ -192,7 +194,7 @@ def store_site_data_db(frame: FrameHierarchy,
         document=document,
         top_level_site=top_level_document if top_level_document else document,
         parent=parent_document_inclusion,
-        crawl_date=frame.visited
+        site=site
     )
 
     for script in frame.scripts:
@@ -203,7 +205,9 @@ def store_site_data_db(frame: FrameHierarchy,
         store_file(script["sha1"], script["content"], logger)
         ScriptInclusion.create(
             script=script_obj,
-            document_inclusion=document_inclusion
+            top_level_site=top_level_document if top_level_document else document,
+            document_inclusion=document_inclusion,
+            site=site
         )
 
     for child_url, child_frame in frame.children.items():
@@ -323,7 +327,7 @@ class StorageAccessApi(Module):
             :return: None
             """
             if self.saa_found:
-                store_site_data_db(self.top_level, logger=self.crawler.log, site=url.site)
+                store_site_data_db(self.top_level, logger=self.crawler.log, site=self.crawler.task.site)
 
         # Register response handler to intercept documents and scripts
         self.crawler.page.on("response", handle_response)
