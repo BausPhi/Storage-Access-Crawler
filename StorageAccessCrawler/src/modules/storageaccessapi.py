@@ -20,15 +20,21 @@ from modules.module import Module
 
 
 class Document(BaseModel):
-    sha1 = TextField(unique=True)
+    sha1 = TextField()
     url = TextField()
     saa = BooleanField(default=False)
+
+    class Meta:
+        indexes = ((('sha1', 'url'), True),) # Create a unique index on sha1 and url
 
 
 class Script(BaseModel):
-    sha1 = TextField(unique=True)
+    sha1 = TextField()
     url = TextField()
     saa = BooleanField(default=False)
+
+    class Meta:
+        indexes = ((('sha1', 'url'), True),) # Create a unique index on sha1 and url
 
 
 class DocumentInclusion(BaseModel):
@@ -186,7 +192,8 @@ def store_site_data_db(frame: FrameHierarchy,
     """
     document, created = Document.get_or_create(
         sha1=frame.sha1,
-        defaults={"url": frame.url, "saa": frame.saa}
+        url=frame.url,
+        defaults={"saa": frame.saa}
     )
     store_file(frame.sha1, frame.content, logger)
 
@@ -200,7 +207,8 @@ def store_site_data_db(frame: FrameHierarchy,
     for script in frame.scripts:
         script_obj, created = Script.get_or_create(
             sha1=script["sha1"],
-            defaults={"url": script["url"], "saa": script["saa"]}
+            url=script["url"],
+            defaults={"saa": script["saa"]}
         )
         store_file(script["sha1"], script["content"], logger)
         ScriptInclusion.create(
@@ -328,6 +336,8 @@ class StorageAccessApi(Module):
             """
             if self.saa_found:
                 store_site_data_db(self.top_level, logger=self.crawler.log, site=self.crawler.task.site)
+            self.top_level = FrameHierarchy(url="", sha1="undefined", content=b"undefined", saa=None)
+            self.saa_found = False
 
         # Register response handler to intercept documents and scripts
         self.crawler.page.on("response", handle_response)
