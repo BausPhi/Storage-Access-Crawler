@@ -23,18 +23,14 @@ class Document(BaseModel):
     sha1 = TextField()
     url = TextField()
     saa = BooleanField(default=False)
-
-    class Meta:
-        indexes = ((('sha1', 'url'), True),) # Create a unique index on sha1 and url
+    sha1_url_hash = TextField(unique=True)
 
 
 class Script(BaseModel):
     sha1 = TextField()
     url = TextField()
     saa = BooleanField(default=False)
-
-    class Meta:
-        indexes = ((('sha1', 'url'), True),) # Create a unique index on sha1 and url
+    sha1_url_hash = TextField(unique=True)
 
 
 class DocumentInclusion(BaseModel):
@@ -189,12 +185,12 @@ def store_site_data_db(frame: FrameHierarchy,
     :param parent_document_inclusion: Parent frame in the hierarchy
     :return: None
     """
+    sha1_url_hash = hash_sha1(frame.sha1.encode() + frame.url.encode())
     document, created = Document.get_or_create(
-        sha1=frame.sha1,
-        url=frame.url,
-        defaults={"saa": frame.saa}
+        sha1_url_hash=sha1_url_hash,
+        defaults={"sha1":frame.sha1, "url":frame.url, "saa": frame.saa}
     )
-    store_file(frame.sha1, frame.content, str(document.id))
+    store_file(sha1_url_hash, frame.content, str(document.id))
 
     document_inclusion = DocumentInclusion.create(
         document=document,
@@ -204,12 +200,12 @@ def store_site_data_db(frame: FrameHierarchy,
     )
 
     for script in frame.scripts:
+        sha1_url_hash_script = hash_sha1(script["sha1"].encode() + script["url"].encode())
         script_obj, created = Script.get_or_create(
-            sha1=script["sha1"],
-            url=script["url"],
-            defaults={"saa": script["saa"]}
+            sha1_url_hash=sha1_url_hash_script,
+            defaults={"sha1":script["sha1"], "url":script["url"], "saa": script["saa"]}
         )
-        store_file(script["sha1"], script["content"], str(script_obj.id))
+        store_file(sha1_url_hash_script, script["content"], str(script_obj.id))
         ScriptInclusion.create(
             script=script_obj,
             top_level_site=top_level_document if top_level_document else document,
