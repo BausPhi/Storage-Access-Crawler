@@ -107,7 +107,6 @@ def store_file(hashed: str, content: bytes, name: str):
     :return: None
     """
     try:
-        print(hashed, create_path_from_hash(hashed, name))
         with open(create_path_from_hash(hashed, name), "xb") as f:
             f.write(content)
     # If file exists do not write it again
@@ -237,7 +236,7 @@ class StorageAccessApi(Module):
         super().__init__(crawler)
         self.saa_found = False
         self.top_level = FrameHierarchy(url="", sha1="undefined",
-                                        content=b"undefined", saa=None)
+                                        content=b"undefined", saa=False)
 
     @staticmethod
     def register_job(log: Logger) -> None:
@@ -336,7 +335,7 @@ class StorageAccessApi(Module):
             """
             if self.saa_found:
                 store_site_data_db(self.top_level, logger=self.crawler.log, site=self.crawler.task.site)
-            self.top_level = FrameHierarchy(url="", sha1="undefined", content=b"undefined", saa=None)
+            self.top_level = FrameHierarchy(url="", sha1="undefined", content=b"undefined", saa=False)
             self.saa_found = False
 
         # Register response handler to intercept documents and scripts
