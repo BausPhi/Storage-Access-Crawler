@@ -23,14 +23,20 @@ class Document(BaseModel):
     sha1 = TextField()
     url = TextField()
     saa = BooleanField(default=False)
-    sha1_url_hash = TextField(unique=True)
+    sha1_url = TextField()
+
+    class Meta:
+        indexes = ((('sha1', 'sha1_url'), True),) # Create a unique index on sha1 and url
 
 
 class Script(BaseModel):
     sha1 = TextField()
     url = TextField()
     saa = BooleanField(default=False)
-    sha1_url_hash = TextField(unique=True)
+    sha1_url = TextField()
+
+    class Meta:
+        indexes = ((('sha1', 'sha1_url'), True),)  # Create a unique index on sha1 and url
 
 
 class DocumentInclusion(BaseModel):
@@ -185,12 +191,13 @@ def store_site_data_db(frame: FrameHierarchy,
     :param parent_document_inclusion: Parent frame in the hierarchy
     :return: None
     """
-    sha1_url_hash = hash_sha1(frame.sha1.encode() + frame.url.encode())
+    sha1_url = hash_sha1(frame.url.encode())
     document, created = Document.get_or_create(
-        sha1_url_hash=sha1_url_hash,
-        defaults={"sha1":frame.sha1, "url":frame.url, "saa": frame.saa}
+        sha1=frame.sha1,
+        sha1_url=sha1_url,
+        defaults={"url":frame.url, "saa": frame.saa}
     )
-    store_file(sha1_url_hash, frame.content, str(document.id))
+    store_file(frame.sha1, frame.content, sha1_url)
 
     document_inclusion = DocumentInclusion.create(
         document=document,
@@ -200,12 +207,13 @@ def store_site_data_db(frame: FrameHierarchy,
     )
 
     for script in frame.scripts:
-        sha1_url_hash_script = hash_sha1(script["sha1"].encode() + script["url"].encode())
+        sha1_url_script = hash_sha1(script["url"].encode())
         script_obj, created = Script.get_or_create(
-            sha1_url_hash=sha1_url_hash_script,
-            defaults={"sha1":script["sha1"], "url":script["url"], "saa": script["saa"]}
+            sha1=script["sha1"],
+            sha1_url=sha1_url_script,
+            defaults={"url":script["url"], "saa": script["saa"]}
         )
-        store_file(sha1_url_hash_script, script["content"], str(script_obj.id))
+        store_file(script["sha1"], script["content"], sha1_url_script)
         ScriptInclusion.create(
             script=script_obj,
             top_level_site=top_level_document if top_level_document else document,
