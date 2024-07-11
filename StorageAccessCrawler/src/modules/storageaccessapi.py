@@ -314,10 +314,6 @@ class StorageAccessApi(Module):
                 viewport = self.crawler.page.viewport_size
                 width, height = viewport["width"], viewport["height"]
 
-                # Make a random mouse click
-                self.crawler.page.mouse.click(x=random.randint(0, width - 1), y=random.randint(0, height - 1),
-                                              button="left", delay=10)
-
                 # Scroll for random amount
                 self.crawler.page.evaluate(f"window.scrollBy(0, {random.randint(0, 200)});")
                 self.crawler.page.evaluate(f"window.scrollBy({random.randint(0, 200)}, 0);")
@@ -327,6 +323,10 @@ class StorageAccessApi(Module):
                         ["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Enter"])
                 for _ in range(random.randint(0, 5)):
                     self.crawler.page.keyboard.press(random.choice(keys))
+
+                # Make a random mouse click
+                self.crawler.page.mouse.click(x=random.randint(0, width - 1), y=random.randint(0, height - 1),
+                                              button="left", delay=10)
             except Exception:
                 self.crawler.log.warning(f"Some user interaction failed!")
 
@@ -375,4 +375,3 @@ class StorageAccessApi(Module):
                 self.saa_found = True
         hashed = hash_sha1(content)
         return hashed, content, saa
-
