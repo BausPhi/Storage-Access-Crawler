@@ -291,10 +291,10 @@ class StorageAccessApi(Module):
                         parent_frame.add_children(FrameHierarchy(url=response.url, sha1=document_hash,
                                                                  content=document_content, saa=saa))
             except TargetClosedError:
-                self.crawler.log.debug(f"Problem handling response {response.url}: Target page was already closed")
+                self.crawler.log.warning(f"Problem handling response {response.url}: Target page was already closed")
             except Error as e:
                 if "identifier" in e.message:
-                    self.crawler.log.debug(
+                    self.crawler.log.warning(
                         f"Problem handling response {response.url}: Page was redirected, response not available"
                     )
             except Exception:
@@ -328,7 +328,7 @@ class StorageAccessApi(Module):
                 for _ in range(random.randint(0, 5)):
                     self.crawler.page.keyboard.press(random.choice(keys))
             except Exception:
-                self.crawler.log.info(f"Some user interaction failed!")
+                self.crawler.log.warning(f"Some user interaction failed!")
 
         def store_collected_data():
             """
