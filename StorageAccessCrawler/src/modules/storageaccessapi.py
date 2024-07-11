@@ -310,6 +310,17 @@ class StorageAccessApi(Module):
             :return: None
             """
             try:
+                def handle_route(route):
+                    request = route.request
+                    # Check if the request is a top-level navigation request
+                    if request.is_navigation_request() and request.frame == self.crawler.page.main_frame:
+                        route.abort()
+                    else:
+                        route.continue_()
+
+                # Prevent top-level navigations
+                self.crawler.page.route("**", handle_route)
+
                 # Get viewport dimensions
                 viewport = self.crawler.page.viewport_size
                 width, height = viewport["width"], viewport["height"]
