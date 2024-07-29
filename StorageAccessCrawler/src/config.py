@@ -43,5 +43,6 @@ class Config:
     # error occurs, for example response is NULL or browser is stuck, use the error codes below
     ERROR_CODES: Dict[str, int] = {'response_error': -1, 'browser_error': -2}
 
-    # Words used for string matching to find SAA usage
-    STRING_MATCHING: list[bytes] = [b'hasStorageAccess', b'requestStorageAccess']
+    # Regex used for string matching to find SAA usage
+    STRING_MATCHING_SAA: str = r"\b(hasStorageAccess|requestStorageAccess)\b"
+    STRING_MATCHING_SAA_FOR: str = r"\brequestStorageAccessFor\b"

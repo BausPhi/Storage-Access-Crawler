@@ -1,6 +1,7 @@
 import hashlib
 import os
 import random
+import re
 import string
 import traceback
 from config import Config
@@ -23,6 +24,7 @@ class Document(BaseModel):
     sha1 = TextField()
     url = TextField()
     saa = BooleanField(default=False)
+    saa_for = BooleanField(default=False)
     sha1_url = TextField()
 
     class Meta:
@@ -33,6 +35,7 @@ class Script(BaseModel):
     sha1 = TextField()
     url = TextField()
     saa = BooleanField(default=False)
+    saa_for = BooleanField(default=False)
     sha1_url = TextField()
 
     class Meta:
@@ -122,7 +125,7 @@ class FrameHierarchy:
     all information about the frame, its documents, scripts and references to the children frames.
     """
 
-    def __init__(self, url, sha1, content, saa):
+    def __init__(self, url, sha1, content, saa, saa_for):
         self.url = url
         self.sha1 = sha1
         self.content = content
@@ -130,6 +133,7 @@ class FrameHierarchy:
         self.children = {}
         self.scripts = []
         self.saa = saa
+        self.saa_for = saa_for
 
     def add_children(self, child):
         if child.url in self.children:
@@ -195,7 +199,7 @@ def store_site_data_db(frame: FrameHierarchy,
     document, created = Document.get_or_create(
         sha1=frame.sha1,
         sha1_url=sha1_url,
-        defaults={"url":frame.url, "saa": frame.saa}
+        defaults={"url": frame.url, "saa": frame.saa, "saa_for": frame.saa_for}
     )
     store_file(frame.sha1, frame.content, sha1_url)
 
@@ -211,7 +215,7 @@ def store_site_data_db(frame: FrameHierarchy,
         script_obj, created = Script.get_or_create(
             sha1=script["sha1"],
             sha1_url=sha1_url_script,
-            defaults={"url":script["url"], "saa": script["saa"]}
+            defaults={"url": script["url"], "saa": script["saa"], "saa_for": script["saa_for"]}
         )
         store_file(script["sha1"], script["content"], sha1_url_script)
         ScriptInclusion.create(
@@ -268,28 +272,28 @@ class StorageAccessApi(Module):
 
                 # Check if response is a script and that it was not a redirect
                 if response.request.resource_type == "script":
-                    script_hash, script_content, saa = self.hash_content(response)
+                    script_hash, script_content, saa, saa_for = self.hash_content(response)
                     parent_list = get_parent_frames(frame=response.frame, script_frame=True)
                     parent_frame = self.top_level.find_child(parent_list)
                     parent_frame.add_script({
-                        "sha1": script_hash, "url": response.url, "content": script_content, "saa": saa
+                        "sha1": script_hash, "url": response.url, "content": script_content, "saa": saa, "saa_for": saa_for
                     })
                 # Check if response is a document and that it was not a redirect
                 elif response.request.resource_type == "document":
                     # Check if the document is the top-level site or loaded in an iframe
                     if response.frame.parent_frame is None:
-                        document_hash, document_content, saa = self.hash_content(response)
+                        document_hash, document_content, saa, saa_for = self.hash_content(response)
                         stored_scripts, stored_children = self.top_level.scripts, self.top_level.children
                         self.top_level = FrameHierarchy(url=response.url, sha1=document_hash,
-                                                        content=document_content, saa=saa)
+                                                        content=document_content, saa=saa, saa_for=saa_for)
                         self.top_level.children = stored_children
                         self.top_level.scripts = stored_scripts
                     else:
-                        document_hash, document_content, saa = self.hash_content(response)
+                        document_hash, document_content, saa, saa_for = self.hash_content(response)
                         parent_list = get_parent_frames(frame=response.frame)
                         parent_frame = self.top_level.find_child(parent_list)
                         parent_frame.add_children(FrameHierarchy(url=response.url, sha1=document_hash,
-                                                                 content=document_content, saa=saa))
+                                                                 content=document_content, saa=saa, saa_for=saa_for))
             except TargetClosedError:
                 self.crawler.log.warning(f"Problem handling response {response.url}: Target page was already closed")
             except Error as e:
@@ -369,20 +373,22 @@ class StorageAccessApi(Module):
 ####### Module Helper Functions #######################################################################################
 
 
-    def hash_content(self, response: Response) -> (str, bytes, bool):
+    def hash_content(self, response: Response) -> (str, bytes, bool, bool):
         """
         Calculates the hash of a script or document and returns the hash and the content.
         Also performs string matching for SAA functions on content and updates the module field **saa_found**
         if it matches and returns a third value that indicates whether SAA was used in the document or script.
 
         :param response: Playwright Response object
-        :return: Hash and content of the Response, whether SAA function were found with string matching
+        :return: Hash and content of the Response, whether SAA functions were found with string matching
         """
         content = response.body()
-        saa = False
-        for word in Config.STRING_MATCHING:
-            if word in content:
-                saa = True
-                self.saa_found = True
+        saa, saa_for = False, False
+        if re.search(pattern=Config.STRING_MATCHING_SAA, string=content) is not None:
+            saa = True
+            self.saa_found = True
+        if re.search(pattern=Config.STRING_MATCHING_SAA_FOR, string=content) is not None:
+            saa_for = True
+            self.saa_found = True
         hashed = hash_sha1(content)
-        return hashed, content, saa
+        return hashed, content, saa, saa_for
