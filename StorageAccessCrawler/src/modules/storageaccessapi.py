@@ -125,7 +125,7 @@ class FrameHierarchy:
     all information about the frame, its documents, scripts and references to the children frames.
     """
 
-    def __init__(self, url, sha1, content, saa, saa_for):
+    def __init__(self, url, sha1, content, saa=False, saa_for=False):
         self.url = url
         self.sha1 = sha1
         self.content = content
