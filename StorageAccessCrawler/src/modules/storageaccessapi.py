@@ -384,10 +384,10 @@ class StorageAccessApi(Module):
         """
         content = response.body()
         saa, saa_for = False, False
-        if re.search(pattern=Config.STRING_MATCHING_SAA, string=content) is not None:
+        if re.search(pattern=Config.STRING_MATCHING_SAA, string=content.decode()) is not None:
             saa = True
             self.saa_found = True
-        if re.search(pattern=Config.STRING_MATCHING_SAA_FOR, string=content) is not None:
+        if re.search(pattern=Config.STRING_MATCHING_SAA_FOR, string=content.decode()) is not None:
             saa_for = True
             self.saa_found = True
         hashed = hash_sha1(content)
