@@ -47,6 +47,7 @@ class DocumentInclusion(BaseModel):
     top_level_site = ForeignKeyField(Document)
     parent = ForeignKeyField("self", null=True, backref="children")  # Top-level if parent is "null"
     site = TextField()
+    browser = TextField()
 
 
 class ScriptInclusion(BaseModel):
@@ -54,6 +55,7 @@ class ScriptInclusion(BaseModel):
     top_level_site = ForeignKeyField(Document)
     document_inclusion = ForeignKeyField(DocumentInclusion, backref="script_inclusions")
     site = TextField()
+    browser = TextField()
 
 
 ####### Helper Functions ##############################################################################################
@@ -181,6 +183,7 @@ class FrameHierarchy:
 def store_site_data_db(frame: FrameHierarchy,
                        logger: Logger,
                        site: str,
+                       browser: str,
                        top_level_document: Document = None,
                        parent_document_inclusion: DocumentInclusion = None):
     """
@@ -191,6 +194,7 @@ def store_site_data_db(frame: FrameHierarchy,
     :param frame: Frame hierarchy
     :param logger: Logging instance to write to the crawler logs
     :param site: Domain of the site that was crawled
+    :param browser: Browser that was used for the crawl
     :param top_level_document: Top-level document DB object
     :param parent_document_inclusion: Parent frame in the hierarchy
     :return: None
@@ -207,7 +211,8 @@ def store_site_data_db(frame: FrameHierarchy,
         document=document,
         top_level_site=top_level_document if top_level_document else document,
         parent=parent_document_inclusion,
-        site=site
+        site=site,
+        browser=browser
     )
 
     for script in frame.scripts:
@@ -222,7 +227,8 @@ def store_site_data_db(frame: FrameHierarchy,
             script=script_obj,
             top_level_site=top_level_document if top_level_document else document,
             document_inclusion=document_inclusion,
-            site=site
+            site=site,
+            browser=browser
         )
 
     for child_url, child_frame in frame.children.items():
@@ -230,6 +236,7 @@ def store_site_data_db(frame: FrameHierarchy,
             child_frame,
             logger,
             site,
+            browser,
             top_level_document if top_level_document else document,
             document_inclusion
         )
@@ -353,7 +360,8 @@ class StorageAccessApi(Module):
             :return: None
             """
             if self.saa_found:
-                store_site_data_db(self.top_level, logger=self.crawler.log, site=self.crawler.task.site)
+                store_site_data_db(self.top_level, logger=self.crawler.log, site=self.crawler.task.site,
+                                   browser=self.crawler.browser.name)
             self.top_level = FrameHierarchy(url="", sha1="undefined", content=b"undefined", saa=False)
             self.saa_found = False
 
