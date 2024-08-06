@@ -371,7 +371,7 @@ class StorageAccessApi(Module):
         # Crawler waits until the handler finished executing
         self.crawler.page.on("close", store_collected_data)
         # Perform random user actions once the page finished loading
-        self.crawler.page.on("load", perform_user_actions)
+        # self.crawler.page.on("load", perform_user_actions)
 
     def receive_response(self, responses: List[Optional[Response]], url: URL, final_url: str, start: List[datetime],
                          repetition: int) -> None:
