@@ -10,7 +10,7 @@ def add_tranco_sites(job: str, ranking_file: str):
         for index, line in enumerate(sites):
             site_name = line.split(',')[1].strip()
             add_site(site_name, f"https://{site_name}/", index, job)
-            if index > 4998:
+            if index > 24998:
                 break
 
 
