@@ -392,11 +392,14 @@ class StorageAccessApi(Module):
         """
         content = response.body()
         saa, saa_for = False, False
-        if re.search(pattern=Config.STRING_MATCHING_SAA, string=content.decode()) is not None:
-            saa = True
-            self.saa_found = True
-        if re.search(pattern=Config.STRING_MATCHING_SAA_FOR, string=content.decode()) is not None:
-            saa_for = True
-            self.saa_found = True
+        try:
+            if re.search(pattern=Config.STRING_MATCHING_SAA, string=content.decode()) is not None:
+                saa = True
+                self.saa_found = True
+            if re.search(pattern=Config.STRING_MATCHING_SAA_FOR, string=content.decode()) is not None:
+                saa_for = True
+                self.saa_found = True
+        except UnicodeDecodeError:
+            self.crawler.log.warning("Response Data was not UTF-8 decodable!")
         hashed = hash_sha1(content)
         return hashed, content, saa, saa_for
