@@ -7,11 +7,9 @@ from database import Task
 def add_tranco_sites(job: str, ranking_file: str):
     with open(ranking_file, 'r') as file:
         sites = file.readlines()
-        for index, line in enumerate(sites):
-            site_name = line.split(',')[1].strip()
-            add_site(site_name, f"https://{site_name}/", index, job)
-            if index > 24998:
-                break
+        for line in sites:
+            rank, site_name = line.strip().split(',')
+            add_site(site_name, f"https://{site_name}/", rank, job)
 
 
 def add_site(site, url, rank, job):

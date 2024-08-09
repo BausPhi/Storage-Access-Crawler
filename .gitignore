@@ -5,4 +5,4 @@
 secrets
 
 ######## Other files #######
-ranking/
+*.csv

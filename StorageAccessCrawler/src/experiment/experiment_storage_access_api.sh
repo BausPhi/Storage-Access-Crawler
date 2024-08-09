@@ -7,20 +7,16 @@ export DISPLAY=:99
 export PYTHONPATH=/pycrawler
 
 # Go to pycrawler directory
-cd /pycrawler/ || exit
+cd /pycrawler/ || echo "Script can only be run in the docker container" && exit
 
-# Download tranco ranking
-mkdir -p ./experiment/ranking
-if [ ! -f "./experiment/ranking/tranco.csv" ]; then
-    echo "Starting download of Tranco ranking!"
-    curl -o ./experiment/ranking/tranco.csv https://tranco-list.eu/download/4Q39X/full
-    echo "Tranco ranking successfully downloaded!"
-else
-    echo "Tranco ranking already downloaded!"
+# Check if website sample was created
+if [ ! -f "./experiment/ranking/sampled.csv" ]; then
+    echo "Please first run the sample python script (experiment/ranking/sample_sites_to_crawl.py) to sample websites from the Tranco ranking!"
+    echo "If the sample should persist across multiple crawls, run it outside of the container!"
 fi
 
 # Populate DB with URLs to crawl
-python3 ./experiment/experiment_storage_access_api.py -j storageaccessapi -r ./experiment/ranking/tranco.csv
+python3 ./experiment/experiment_storage_access_api.py -j storageaccessapi -r ./experiment/ranking/sampled.csv
 
 echo "Experiment storageaccessapi starting"
 
