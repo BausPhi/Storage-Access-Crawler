@@ -7,7 +7,10 @@ export DISPLAY=:99
 export PYTHONPATH=/pycrawler
 
 # Go to pycrawler directory
-cd /pycrawler/ || echo "Script can only be run in the docker container" && exit
+if ! cd /pycrawler/; then
+    echo "Script can only be run in the docker container"
+    exit 1
+fi
 
 # Check if website sample was created
 if [ ! -f "./experiment/ranking/sampled.csv" ]; then
