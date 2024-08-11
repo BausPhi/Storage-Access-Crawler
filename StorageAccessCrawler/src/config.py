@@ -44,5 +44,6 @@ class Config:
     ERROR_CODES: Dict[str, int] = {'response_error': -1, 'browser_error': -2}
 
     # Regex used for string matching to find SAA usage
-    STRING_MATCHING_SAA: str = r"\b(hasStorageAccess|requestStorageAccess)\b"
+    STRING_MATCHING_HAS_SAA: str = r"\bhasStorageAccess\b"
+    STRING_MATCHING_REQUEST_SAA: str = r"\brequestStorageAccess\b"
     STRING_MATCHING_SAA_FOR: str = r"\brequestStorageAccessFor\b"
