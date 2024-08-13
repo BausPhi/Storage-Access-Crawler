@@ -18,7 +18,7 @@ from utils import get_tld_object, get_url_origin
 
 
 class Crawler:
-    def __init__(self, job: str, crawler_id: int, taskid: int, log: Logger, modules: List[Type[Module]]) -> None:
+    def __init__(self, job: str, crawler_id: int, taskid: int, log: Logger, modules: List[Type[Module]], browser_type) -> None:
         # Prepare variables
         self.log: Logger = log
         self.job_id: str = job
@@ -26,6 +26,7 @@ class Crawler:
         self.state: Dict[str, Any] = {}
         self.cache: pathlib.Path = Config.LOG / f"job{self.job_id}crawler{self.crawler_id}.cache"
         self.task: Task = Task.get_by_id(taskid)
+        self.browser_type = browser_type
 
         # Load previous state
         if Config.RESTART and self.cache.exists():
@@ -88,7 +89,7 @@ class Crawler:
             module.add_url_filter_out(url_filter_out)
         self.log.debug("Prepared filters")
 
-    def start_crawl(self):
+    def start_crawl(self, browser):
         # Stop crawler earlier if stop flag is set
         if self.stop:
             if Config.RESTART and self.cache.exists():
@@ -99,14 +100,14 @@ class Crawler:
         # Initiate playwright, browser, context, and page
         self.playwright = sync_playwright().start()
 
-        if Config.BROWSER == 'firefox':
+        if browser == 'firefox':
             self.browser = self.playwright.firefox.launch(
                 headless=Config.HEADLESS,
                 firefox_user_prefs={
                     "network.cookie.cookieBehavior": 5,  # Enable Cookie Partitioning (Total Cookie Protection)
                 }
             )
-        elif Config.BROWSER == 'webkit':
+        elif browser == 'webkit':
             self.browser = self.playwright.webkit.launch(
                 headless=Config.HEADLESS
             )

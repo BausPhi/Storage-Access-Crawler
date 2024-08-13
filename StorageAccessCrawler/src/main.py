@@ -236,8 +236,9 @@ def _start_crawler(job: str, crawler_id: int, task: int, log_path: pathlib.Path,
     """
     log = _get_logger(job, crawler_id, log_path)
     log.info('Start crawler')
-    crawler: Crawler = Crawler(job, crawler_id, task, log, modules)
-    crawler.start_crawl()
+    for browser in ["chromium", "firefox", "webkit"]:
+        crawler: Crawler = Crawler(job, crawler_id, task, log, modules, browser)
+        crawler.start_crawl(browser)
     log.info('Stop crawler')
     log.handlers[-1].close()
 

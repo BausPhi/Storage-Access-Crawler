@@ -368,7 +368,7 @@ class StorageAccessApi(Module):
             """
             if self.saa_found:
                 store_site_data_db(self.top_level, logger=self.crawler.log, site=self.crawler.task.site,
-                                   browser=Config.BROWSER)
+                                   browser=self.crawler.browser_type)
             self.top_level = FrameHierarchy(url="", sha1="undefined", content=b"undefined")
             self.saa_found = False
 
