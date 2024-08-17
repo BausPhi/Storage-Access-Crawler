@@ -21,32 +21,24 @@ from modules.module import Module
 
 
 class Document(BaseModel):
-    sha1 = TextField()
-    url = TextField()
+    sha1 = TextField(unique=True)
     has_saa = BooleanField(default=False)
     request_saa = BooleanField(default=False)
     saa_for = BooleanField(default=False)
-    sha1_url = TextField()
-
-    class Meta:
-        indexes = ((('sha1', 'sha1_url'), True),) # Create a unique index on sha1 and url
 
 
 class Script(BaseModel):
-    sha1 = TextField()
-    url = TextField()
+    sha1 = TextField(unique=True)
     has_saa = BooleanField(default=False)
     request_saa = BooleanField(default=False)
     saa_for = BooleanField(default=False)
-    sha1_url = TextField()
-
-    class Meta:
-        indexes = ((('sha1', 'sha1_url'), True),)  # Create a unique index on sha1 and url
 
 
 class DocumentInclusion(BaseModel):
     document = ForeignKeyField(Document, backref="document_inclusions")
+    url = TextField()
     top_level_site = ForeignKeyField(Document)
+    top_level_url = TextField()
     parent = ForeignKeyField("self", null=True, backref="children")  # Top-level if parent is "null"
     site = TextField()
     browser = TextField()
@@ -54,8 +46,11 @@ class DocumentInclusion(BaseModel):
 
 class ScriptInclusion(BaseModel):
     script = ForeignKeyField(Script, backref="script_inclusions")
+    url = TextField()
     top_level_site = ForeignKeyField(Document)
+    top_level_url = TextField()
     document_inclusion = ForeignKeyField(DocumentInclusion, backref="script_inclusions")
+    document_inclusion_url = TextField()
     site = TextField()
     browser = TextField()
 
@@ -90,23 +85,22 @@ def hash_sha1(x: bytes) -> str:
     return hashlib.sha1(x).hexdigest()
 
 
-def create_path_from_hash(hash_str: str, file_name: str) -> str:
+def create_path_from_hash(hash_str: str) -> str:
     """
     Creates and returns a file system path according to a given document or script hash.
     For a script with the hash **3f4a** the path **./file_storage/3/f/4/a** would be created and returned.
 
-    :param file_name: Name of the file we want to store
     :param hash_str: Hash of the file we want to store
     :return: Created file path
     """
     dir_path_parts = list(hash_str)
     dir_path = os.path.join("./file_storage/", *dir_path_parts)
     os.makedirs(dir_path, exist_ok=True)
-    file_path = os.path.join(dir_path, file_name)
+    file_path = os.path.join(dir_path, hash_str)
     return file_path
 
 
-def store_file(hashed: str, content: bytes, name: str):
+def store_file(hashed: str, content: bytes):
     """
     Stores the content of a document or script in the file system.
 
@@ -116,7 +110,7 @@ def store_file(hashed: str, content: bytes, name: str):
     :return: None
     """
     try:
-        with open(create_path_from_hash(hashed, name), "xb") as f:
+        with open(create_path_from_hash(hashed), "xb") as f:
             f.write(content)
     # If file exists do not write it again
     except FileExistsError:
@@ -188,6 +182,7 @@ def store_site_data_db(frame: FrameHierarchy,
                        site: str,
                        browser: str,
                        top_level_document: Document = None,
+                       top_level_url: str = None,
                        parent_document_inclusion: DocumentInclusion = None):
     """
     Takes the frame hierarchy and recursively stores all collected information about the site in the database.
@@ -199,41 +194,46 @@ def store_site_data_db(frame: FrameHierarchy,
     :param site: Domain of the site that was crawled
     :param browser: Browser that was used for the crawl
     :param top_level_document: Top-level document DB object
+    :param top_level_url: URL of the top-level site
     :param parent_document_inclusion: Parent frame in the hierarchy
     :return: None
     """
-    sha1_url = hash_sha1(frame.url.encode())
+    print(frame.has_saa, type(frame.has_saa))
     document, created = Document.get_or_create(
         sha1=frame.sha1,
-        sha1_url=sha1_url,
-        defaults={"url": frame.url, "has_saa": frame.has_saa, "request_saa": frame.request_saa,
+        defaults={"has_saa": frame.has_saa, "request_saa": frame.request_saa,
                   "saa_for": frame.saa_for}
     )
-    store_file(frame.sha1, frame.content, sha1_url)
+    print(document.has_saa)
+    current_url = frame.url
+    store_file(frame.sha1, frame.content)
 
     document_inclusion = DocumentInclusion.create(
         document=document,
         top_level_site=top_level_document if top_level_document else document,
+        top_level_url=top_level_url if top_level_url else current_url,
         parent=parent_document_inclusion,
         site=site,
-        browser=browser
+        browser=browser,
+        url=frame.url
     )
 
     for script in frame.scripts:
-        sha1_url_script = hash_sha1(script["url"].encode())
         script_obj, created = Script.get_or_create(
             sha1=script["sha1"],
-            sha1_url=sha1_url_script,
-            defaults={"url": script["url"], "has_saa": script["has_saa"], "request_saa": script["request_saa"],
+            defaults={"has_saa": script["has_saa"], "request_saa": script["request_saa"],
                       "saa_for": script["saa_for"]}
         )
-        store_file(script["sha1"], script["content"], sha1_url_script)
+        store_file(script["sha1"], script["content"])
         ScriptInclusion.create(
             script=script_obj,
             top_level_site=top_level_document if top_level_document else document,
+            top_level_url=top_level_url if top_level_url else current_url,
             document_inclusion=document_inclusion,
+            document_inclusion_url=current_url,
             site=site,
-            browser=browser
+            browser=browser,
+            url=script["url"]
         )
 
     for child_url, child_frame in frame.children.items():
@@ -243,6 +243,7 @@ def store_site_data_db(frame: FrameHierarchy,
             site,
             browser,
             top_level_document if top_level_document else document,
+            top_level_url if top_level_url else current_url,
             document_inclusion
         )
 
