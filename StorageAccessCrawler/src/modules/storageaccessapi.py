@@ -130,7 +130,7 @@ class FrameHierarchy:
         self.visited = datetime.now().now()
         self.children = {}
         self.scripts = []
-        self.has_saa = has_saa,
+        self.has_saa = has_saa
         self.request_saa = request_saa
         self.saa_for = saa_for
 
