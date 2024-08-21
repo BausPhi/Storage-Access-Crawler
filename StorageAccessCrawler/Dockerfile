@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright:v1.44.1-jammy
+FROM mcr.microsoft.com/playwright:v1.46.1-jammy
 
 # Install required packages
 RUN apt-get update -y
