@@ -198,13 +198,11 @@ def store_site_data_db(frame: FrameHierarchy,
     :param parent_document_inclusion: Parent frame in the hierarchy
     :return: None
     """
-    print(frame.has_saa, type(frame.has_saa))
     document, created = Document.get_or_create(
         sha1=frame.sha1,
         defaults={"has_saa": frame.has_saa, "request_saa": frame.request_saa,
                   "saa_for": frame.saa_for}
     )
-    print(document.has_saa)
     current_url = frame.url
     store_file(frame.sha1, frame.content)
 
