@@ -55,6 +55,19 @@ class ScriptInclusion(BaseModel):
     browser = TextField()
 
 
+class SaaCall(BaseModel):
+    top_level_url = TextField()
+    document_url = TextField()
+    site = TextField()
+    has_saa = BooleanField(default=False)
+    request_saa = BooleanField(default=False)
+    saa_for = BooleanField(default=False)
+
+    # Make entries unique by top_level_url and document_url
+    class Meta:
+        indexes = ((('top_level_url', 'document_url'), True),)
+
+
 ####### Helper Functions ##############################################################################################
 
 
@@ -261,7 +274,7 @@ class StorageAccessApi(Module):
     def register_job(log: Logger) -> None:
         log.info("Create tables for StorageAccessApi module")
         with database:
-            database.create_tables([Document, DocumentInclusion, Script, ScriptInclusion])
+            database.create_tables([Document, DocumentInclusion, Script, ScriptInclusion, SaaCall])
 
     def add_handlers(self, url: URL) -> None:
         super().add_handlers(url)
@@ -372,6 +385,28 @@ class StorageAccessApi(Module):
             self.top_level = FrameHierarchy(url="", sha1="undefined", content=b"undefined")
             self.saa_found = False
 
+        # Handle when a Storage Access API function was called
+        def handle_storage_access_api_called(function, document_url):
+            # print(function, document_url)
+            while not self.top_level:
+                pass
+            call_object, created = SaaCall.get_or_create(
+                top_level_url=self.top_level.url,
+                document_url=document_url,
+                defaults={"site": self.crawler.task.site, "has_saa": function == "hasStorageAccess",
+                          "request_saa": function == "requestStorageAccess",
+                          "saa_for": function == "requestStorageAccessFor"}
+            )
+            if not created:
+                call_object.has_saa = function == "hasStorageAccess" if not call_object.has_saa else call_object.has_saa
+                call_object.request_saa = function == "requestStorageAccess" if not call_object.request_saa else call_object.request_saa
+                call_object.saa_for = function == "requestStorageAccessFor" if not call_object.saa_for else call_object.saa_for
+                call_object.save()
+
+        # Inject Storage Access API hooking script into webpage
+        def inject_js(page):
+            page.add_init_script(path="./resources/hook_api_calls.js")
+
         # Register response handler to intercept documents and scripts
         self.crawler.page.on("response", handle_response)
         # Register closing handler that executes before the site is changed
@@ -379,6 +414,11 @@ class StorageAccessApi(Module):
         self.crawler.page.on("close", store_collected_data)
         # Perform random user actions once the page finished loading
         # self.crawler.page.on("load", perform_user_actions)
+
+        # Register onload event handler to inject script for function hooking
+        self.crawler.page.on("load", inject_js(self.crawler.page))
+        # Expose the Storage Access API call handler to the page
+        self.crawler.page.expose_function("sa_call_handler", handle_storage_access_api_called)
 
     def receive_response(self, responses: List[Optional[Response]], url: URL, final_url: str, start: List[datetime],
                          repetition: int) -> None:
