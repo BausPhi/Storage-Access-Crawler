@@ -387,7 +387,6 @@ class StorageAccessApi(Module):
 
         # Handle when a Storage Access API function was called
         def handle_storage_access_api_called(function, document_url):
-            # print(function, document_url)
             while not self.top_level:
                 pass
             call_object, created = SaaCall.get_or_create(
