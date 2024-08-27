@@ -122,7 +122,8 @@ class Crawler:
             storage_state=self.state.get('Context', None),
             **self.playwright.devices[Config.DEVICE],
             locale=Config.LOCALE,
-            timezone_id=Config.TIMEZONE
+            timezone_id=Config.TIMEZONE,
+            permissions = ["storage-access"]
         )
 
         self.page = self.context.new_page()
@@ -206,7 +207,8 @@ class Crawler:
                 storage_state=self.state.get('Context', None),
                 **self.playwright.devices[Config.DEVICE],
                 locale=Config.LOCALE,
-                timezone_id=Config.TIMEZONE
+                timezone_id=Config.TIMEZONE,
+                permissions=["storage-access"]
             )
 
             self.page = self.context.new_page()
