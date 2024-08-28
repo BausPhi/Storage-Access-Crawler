@@ -385,8 +385,14 @@ class StorageAccessApi(Module):
             self.top_level = FrameHierarchy(url="", sha1="undefined", content=b"undefined")
             self.saa_found = False
 
-        # Handle when a Storage Access API function was called
         def handle_storage_access_api_called(function, document_url):
+            """
+            Handle when a Storage Access API function was called
+
+            :param function: SAA function that was called
+            :param document_url: Document that called the function
+            :return: None
+            """
             while not self.top_level:
                 pass
             call_object, created = SaaCall.get_or_create(
@@ -402,8 +408,13 @@ class StorageAccessApi(Module):
                 call_object.saa_for = function == "requestStorageAccessFor" if not call_object.saa_for else call_object.saa_for
                 call_object.save()
 
-        # Inject Storage Access API hooking script into webpage
         def inject_js(page):
+            """
+            Inject Storage Access API hooking script into webpage
+
+            :param page: Page object to inject script into
+            :return: None
+            """
             page.add_init_script(path="./resources/hook_api_calls.js")
 
         # Register response handler to intercept documents and scripts
