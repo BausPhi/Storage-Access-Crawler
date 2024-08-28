@@ -343,8 +343,7 @@ class StorageAccessApi(Module):
             """
             Performs random user actions to increase the probability of triggering SAA functions. This is done because
             if no access was granted to the site before, requests must be preceded by a user interaction in order to get
-            access. Therefore, sites might only call the API after a user interaction. Also, this might yield
-            better crawl results.
+            access. Therefore, sites might only call the API after a user interaction.
 
             :return: None
             """
@@ -360,23 +359,30 @@ class StorageAccessApi(Module):
                 # Prevent top-level navigations
                 self.crawler.page.route("**", handle_route)
 
-                # Get viewport dimensions
-                viewport = self.crawler.page.viewport_size
-                width, height = viewport["width"], viewport["height"]
+                def interact_with_frames_recursively(frame):
+                    # Click a button
+                    buttons = frame.locator('button')
+                    num_buttons = buttons.count()
+                    for i in range(num_buttons):
+                        button = buttons.nth(i)
+                        button.scroll_into_view_if_needed()
+                        button.click()
 
-                # Scroll for random amount
-                self.crawler.page.evaluate(f"window.scrollBy(0, {random.randint(0, 200)});")
-                self.crawler.page.evaluate(f"window.scrollBy({random.randint(0, 200)}, 0);")
+                    # Scroll in the iframes
+                    scroll_y = self.crawler.page.evaluate("() => document.body.scrollHeight")
+                    scroll_x = self.crawler.page.evaluate("() => document.body.scrollWidth")
+                    self.crawler.page.mouse.wheel(scroll_x, scroll_y)
 
-                # Press random keys
-                keys = (list(string.ascii_lowercase) + list(string.digits) +
-                        ["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Enter"])
-                for _ in range(random.randint(0, 5)):
-                    self.crawler.page.keyboard.press(random.choice(keys))
+                    # Recursively interact with all child frames
+                    for child_frame in frame.child_frames:
+                        interact_with_frames_recursively(child_frame)
 
-                # Make a random mouse click
-                self.crawler.page.mouse.click(x=random.randint(0, width - 1), y=random.randint(0, height - 1),
-                                              button="left", delay=10)
+                frames = self.crawler.page.frames
+                for iframe in frames:
+                    if iframe == self.crawler.page.main_frame:
+                        print("Main Frame!")
+                        continue
+                    interact_with_frames_recursively(iframe)
             except Exception:
                 self.crawler.log.warning(f"Some user interaction failed!")
 
@@ -432,8 +438,8 @@ class StorageAccessApi(Module):
         # Crawler waits until the handler finished executing
         self.crawler.page.on("close", store_collected_data)
         # Perform random user actions once the page finished loading
-        # self.crawler.page.on("load", perform_user_actions)
-
+        # ATTENTION: Disable when crawling with Firefox as it leads to errors
+        self.crawler.page.on("load", perform_user_actions)
         # Register onload event handler to inject script for function hooking
         self.crawler.page.on("load", inject_js(self.crawler.page))
         # Expose the Storage Access API call handler to the page
