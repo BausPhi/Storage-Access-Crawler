@@ -42,6 +42,7 @@ class DocumentInclusion(BaseModel):
     parent = ForeignKeyField("self", null=True, backref="children")  # Top-level if parent is "null"
     site = TextField()
     browser = TextField()
+    job = TextField()
 
 
 class ScriptInclusion(BaseModel):
@@ -53,6 +54,7 @@ class ScriptInclusion(BaseModel):
     document_inclusion_url = TextField()
     site = TextField()
     browser = TextField()
+    job = TextField()
 
 
 class SaaCall(BaseModel):
@@ -62,10 +64,11 @@ class SaaCall(BaseModel):
     has_saa = BooleanField(default=False)
     request_saa = BooleanField(default=False)
     saa_for = BooleanField(default=False)
+    job = TextField()
 
     # Make entries unique by top_level_url and document_url
     class Meta:
-        indexes = ((('top_level_url', 'document_url'), True),)
+        indexes = ((('top_level_url', 'document_url', 'job'), True),)
 
 
 ####### Helper Functions ##############################################################################################
@@ -194,6 +197,7 @@ def store_site_data_db(frame: FrameHierarchy,
                        logger: Logger,
                        site: str,
                        browser: str,
+                       job_id: str,
                        top_level_document: Document = None,
                        top_level_url: str = None,
                        parent_document_inclusion: DocumentInclusion = None):
@@ -206,6 +210,7 @@ def store_site_data_db(frame: FrameHierarchy,
     :param logger: Logging instance to write to the crawler logs
     :param site: Domain of the site that was crawled
     :param browser: Browser that was used for the crawl
+    :param job_id: Current crawler job
     :param top_level_document: Top-level document DB object
     :param top_level_url: URL of the top-level site
     :param parent_document_inclusion: Parent frame in the hierarchy
@@ -226,7 +231,8 @@ def store_site_data_db(frame: FrameHierarchy,
         parent=parent_document_inclusion,
         site=site,
         browser=browser,
-        url=frame.url
+        url=frame.url,
+        job=job_id
     )
 
     for script in frame.scripts:
@@ -244,7 +250,8 @@ def store_site_data_db(frame: FrameHierarchy,
             document_inclusion_url=current_url,
             site=site,
             browser=browser,
-            url=script["url"]
+            url=script["url"],
+            job=job_id
         )
 
     for child_url, child_frame in frame.children.items():
@@ -253,6 +260,7 @@ def store_site_data_db(frame: FrameHierarchy,
             logger,
             site,
             browser,
+            job_id,
             top_level_document if top_level_document else document,
             top_level_url if top_level_url else current_url,
             document_inclusion
@@ -381,7 +389,7 @@ class StorageAccessApi(Module):
             """
             if self.saa_found:
                 store_site_data_db(self.top_level, logger=self.crawler.log, site=self.crawler.task.site,
-                                   browser=Config.BROWSER)
+                                   browser=Config.BROWSER, job_id=self.crawler.job_id)
             self.top_level = FrameHierarchy(url="", sha1="undefined", content=b"undefined")
             self.saa_found = False
 
@@ -398,6 +406,7 @@ class StorageAccessApi(Module):
             call_object, created = SaaCall.get_or_create(
                 top_level_url=self.top_level.url,
                 document_url=document_url,
+                job=self.crawler.job_id,
                 defaults={"site": self.crawler.task.site, "has_saa": function == "hasStorageAccess",
                           "request_saa": function == "requestStorageAccess",
                           "saa_for": function == "requestStorageAccessFor"}
