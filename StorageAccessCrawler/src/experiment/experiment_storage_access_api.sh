@@ -18,15 +18,19 @@ if [ ! -f "./experiment/ranking/sampled.csv" ]; then
     echo "If the sample should persist across multiple crawls, run it outside of the container!"
 fi
 
-# Populate DB with URLs to crawl
-python3 ./experiment/experiment_storage_access_api.py -j storageaccessapi -r ./experiment/ranking/sampled.csv
+for i in $(seq 1 3)
+do
+    # Construct the job name with the iteration number
+    job_name="storageaccessapi$i"
 
-echo "Experiment storageaccessapi starting"
+    # Populate DB with URLs to crawl
+    python3 ./experiment/experiment_storage_access_api.py -j "$job_name" -r ./experiment/ranking/sampled.csv
+    echo "Experiment $job_name starting"
+    echo "This might take a while. You can watch the experiment via VNC or the logs in /pycrawler/logs"
 
-echo "This might take a while. You can watch the experiment via VNC or the logs in /pycrawler/logs"
+    # Now launch the actual experiment
+    python3 main.py -m StorageAccessApi -j "$job_name" -c 30
 
-# now launch the actual experiment
-python3 main.py -m StorageAccessApi -j storageaccessapi -c 30
-
-echo "Experiment storageaccessapi completed"
-echo "You can inspect the raw results in the database"
+    echo "Experiment $job_name completed"
+    echo "You can inspect the raw results in the database"
+done
