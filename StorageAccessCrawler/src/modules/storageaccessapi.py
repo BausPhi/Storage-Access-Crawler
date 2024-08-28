@@ -380,7 +380,6 @@ class StorageAccessApi(Module):
                 frames = self.crawler.page.frames
                 for iframe in frames:
                     if iframe == self.crawler.page.main_frame:
-                        print("Main Frame!")
                         continue
                     interact_with_frames_recursively(iframe)
             except Exception:
