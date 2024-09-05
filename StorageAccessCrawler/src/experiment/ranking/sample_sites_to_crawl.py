@@ -16,22 +16,25 @@ def read_websites(path):
     return websites
 
 
-def sample_websites(websites, sizes):
-    top_10k = websites[:10000]
-    next_90k = websites[10000:100000]
-    rest = websites[100000:]
+def sample_websites(websites):
+    section_1 = websites[:50000]
+    section_2 = websites[50000:100000]
+    section_3 = websites[100000:1000000]
+    section_4 = websites[1000000:]
 
-    sampled_top_10k = random.sample(top_10k, sizes[0])
-    sampled_next_90k = random.sample(next_90k, sizes[1])
-    sampled_rest = random.sample(rest, sizes[2])
+    sample_sizes = [50000, 25000, 15000, 10000]
+    sampled_section_1 = random.sample(section_1, sample_sizes[0])
+    sampled_section_2 = random.sample(section_2, sample_sizes[1])
+    sampled_section_3 = random.sample(section_3, sample_sizes[2])
+    sampled_section_4 = random.sample(section_4, sample_sizes[3])
 
-    result = sampled_top_10k + sampled_next_90k + sampled_rest
+    result = sampled_section_1 + sampled_section_2 + sampled_section_3 + sampled_section_4
     result.sort(key=sort_rank)
 
     return result
 
 
-def main(sample_path, sizes):
+def main(sample_path):
     # Set working directory to file directory
     abspath = os.path.abspath(__file__)
     dname = os.path.dirname(abspath)
@@ -48,14 +51,13 @@ def main(sample_path, sizes):
         print("Tranco ranking already downloaded!")
 
     websites = read_websites(sample_path)
-    sampled_websites = sample_websites(websites, sizes)
+    sampled_websites = sample_websites(websites)
     with open("sampled.csv", "w") as fd:
         fd.writelines(sampled_websites)
 
 
-sample_sizes = [5000, 3000, 2000]
 file_path = 'tranco.csv'
 
-# Run the main function
+
 if __name__ == '__main__':
-    main(file_path, sample_sizes)
+    main(file_path)
