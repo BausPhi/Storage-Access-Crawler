@@ -182,16 +182,6 @@ class FrameHierarchy:
                 curr_frame = curr_frame.children[parent]
         return curr_frame
 
-    def __str__(self) -> str:
-        return self.string_helper()
-
-    def string_helper(self, level=0) -> str:
-        result = "\t" * level + self.url + " / saa: " + str(self.saa) + "\n"
-        if self.children is not None:
-            for child in self.children.values():
-                result += child.string_helper(level=level + 1)
-        return result
-
 
 def store_site_data_db(frame: FrameHierarchy,
                        logger: Logger,
@@ -216,13 +206,20 @@ def store_site_data_db(frame: FrameHierarchy,
     :param parent_document_inclusion: Parent frame in the hierarchy
     :return: None
     """
-    document, created = Document.get_or_create(
-        sha1=frame.sha1,
-        defaults={"has_saa": frame.has_saa, "request_saa": frame.request_saa,
-                  "saa_for": frame.saa_for}
-    )
+    if frame.has_saa or frame.request_saa or frame.saa_for:
+        document, created = Document.get_or_create(
+            sha1=frame.sha1,
+            defaults={"has_saa": frame.has_saa, "request_saa": frame.request_saa,
+                      "saa_for": frame.saa_for}
+        )
+        store_file(frame.sha1, frame.content)
+    else:
+        document, created = Document.get_or_create(
+            sha1="dummy_document_for_non_saa_inclusions",
+            defaults={"has_saa": False, "request_saa": False,
+                      "saa_for": False}
+        )
     current_url = frame.url
-    store_file(frame.sha1, frame.content)
 
     document_inclusion = DocumentInclusion.create(
         document=document,
@@ -236,23 +233,24 @@ def store_site_data_db(frame: FrameHierarchy,
     )
 
     for script in frame.scripts:
-        script_obj, created = Script.get_or_create(
-            sha1=script["sha1"],
-            defaults={"has_saa": script["has_saa"], "request_saa": script["request_saa"],
-                      "saa_for": script["saa_for"]}
-        )
-        store_file(script["sha1"], script["content"])
-        ScriptInclusion.create(
-            script=script_obj,
-            top_level_site=top_level_document if top_level_document else document,
-            top_level_url=top_level_url if top_level_url else current_url,
-            document_inclusion=document_inclusion,
-            document_inclusion_url=current_url,
-            site=site,
-            browser=browser,
-            url=script["url"],
-            job=job_id
-        )
+        if script["has_saa"] or script["request_saa"] or script["saa_for"]:
+            script_obj, created = Script.get_or_create(
+                sha1=script["sha1"],
+                defaults={"has_saa": script["has_saa"], "request_saa": script["request_saa"],
+                          "saa_for": script["saa_for"]}
+            )
+            store_file(script["sha1"], script["content"])
+            ScriptInclusion.create(
+                script=script_obj,
+                top_level_site=top_level_document if top_level_document else document,
+                top_level_url=top_level_url if top_level_url else current_url,
+                document_inclusion=document_inclusion,
+                document_inclusion_url=current_url,
+                site=site,
+                browser=browser,
+                url=script["url"],
+                job=job_id
+            )
 
     for child_url, child_frame in frame.children.items():
         store_site_data_db(
