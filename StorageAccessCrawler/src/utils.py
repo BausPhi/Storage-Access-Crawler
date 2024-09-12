@@ -130,12 +130,9 @@ def get_url_from_href(href: str, origin: tld.utils.Result) -> Optional[tld.utils
         res: Optional[tld.utils.Result] = get_tld_object(origin.parsed_url.scheme + ":" + href)
     else:
         if href[0] == '/':
-            path: str = origin.parsed_url.path[:-1] if origin.parsed_url.path and \
-                                                       origin.parsed_url.path[
-                                                           -1] == '/' else origin.parsed_url.path
+            path: str = ""
         else:
-            path: str = origin.parsed_url.path if origin.parsed_url.path and origin.parsed_url.path[
-                -1] == '/' else origin.parsed_url.path + '/'
+            path: str = "/"
 
         res: Optional[tld.utils.Result] = get_tld_object(
             origin.parsed_url.scheme + "://" + origin.parsed_url.netloc + path + href)
