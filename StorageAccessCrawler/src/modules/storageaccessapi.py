@@ -122,7 +122,6 @@ def store_file(hashed: str, content: bytes):
 
     :param hashed: Hash of the document or script
     :param content: Content of the document or script
-    :param name: Name of the resource file
     :return: None
     """
     try:
@@ -223,8 +222,8 @@ def store_site_data_db(frame: FrameHierarchy,
 
     document_inclusion = DocumentInclusion.create(
         document=document,
-        top_level_site=top_level_document if top_level_document else document,
-        top_level_url=top_level_url if top_level_url else current_url,
+        top_level_site=top_level_document if top_level_document is not None else document,
+        top_level_url=top_level_url if top_level_url is not None else current_url,
         parent=parent_document_inclusion,
         site=site,
         browser=browser,
@@ -242,8 +241,8 @@ def store_site_data_db(frame: FrameHierarchy,
             store_file(script["sha1"], script["content"])
             ScriptInclusion.create(
                 script=script_obj,
-                top_level_site=top_level_document if top_level_document else document,
-                top_level_url=top_level_url if top_level_url else current_url,
+                top_level_site=top_level_document if top_level_document is not None else document,
+                top_level_url=top_level_url if top_level_url is not None else current_url,
                 document_inclusion=document_inclusion,
                 document_inclusion_url=current_url,
                 site=site,
@@ -259,8 +258,8 @@ def store_site_data_db(frame: FrameHierarchy,
             site,
             browser,
             job_id,
-            top_level_document if top_level_document else document,
-            top_level_url if top_level_url else current_url,
+            top_level_document if top_level_document is not None else document,
+            top_level_url if top_level_url is not None else current_url,
             document_inclusion
         )
 
@@ -297,7 +296,7 @@ class StorageAccessApi(Module):
             """
             try:
                 # Do not handle responses with specific status code
-                if not response.ok or response.status == 204:
+                if (not response.ok or response.status == 204) and not response.status == 404:
                     return
 
                 # Check if response is a script and that it was not a redirect
