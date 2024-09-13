@@ -43,6 +43,7 @@ class DocumentInclusion(BaseModel):
     site = TextField()
     browser = TextField()
     job = TextField()
+    landing_page = BooleanField()
 
 
 class ScriptInclusion(BaseModel):
@@ -55,6 +56,7 @@ class ScriptInclusion(BaseModel):
     site = TextField()
     browser = TextField()
     job = TextField()
+    landing_page = BooleanField()
 
 
 class SaaCall(BaseModel):
@@ -65,6 +67,7 @@ class SaaCall(BaseModel):
     request_saa = BooleanField(default=False)
     saa_for = BooleanField(default=False)
     job = TextField()
+    landing_page = BooleanField()
 
     # Make entries unique by top_level_url and document_url
     class Meta:
@@ -187,6 +190,7 @@ def store_site_data_db(frame: FrameHierarchy,
                        site: str,
                        browser: str,
                        job_id: str,
+                       landing_page: bool,
                        top_level_document: Document = None,
                        top_level_url: str = None,
                        parent_document_inclusion: DocumentInclusion = None):
@@ -200,6 +204,7 @@ def store_site_data_db(frame: FrameHierarchy,
     :param site: Domain of the site that was crawled
     :param browser: Browser that was used for the crawl
     :param job_id: Current crawler job
+    :param landing_page: Whether the current page is a landing page
     :param top_level_document: Top-level document DB object
     :param top_level_url: URL of the top-level site
     :param parent_document_inclusion: Parent frame in the hierarchy
@@ -228,7 +233,8 @@ def store_site_data_db(frame: FrameHierarchy,
         site=site,
         browser=browser,
         url=frame.url,
-        job=job_id
+        job=job_id,
+        landing_page=landing_page,
     )
 
     for script in frame.scripts:
@@ -248,7 +254,8 @@ def store_site_data_db(frame: FrameHierarchy,
                 site=site,
                 browser=browser,
                 url=script["url"],
-                job=job_id
+                job=job_id,
+                landing_page=landing_page,
             )
 
     for child_url, child_frame in frame.children.items():
@@ -258,6 +265,7 @@ def store_site_data_db(frame: FrameHierarchy,
             site,
             browser,
             job_id,
+            landing_page,
             top_level_document if top_level_document is not None else document,
             top_level_url if top_level_url is not None else current_url,
             document_inclusion
@@ -319,6 +327,7 @@ class StorageAccessApi(Module):
                                                         request_saa=request_saa, saa_for=saa_for)
                         self.top_level.children = stored_children
                         self.top_level.scripts = stored_scripts
+                        self.current_url = self.crawler.currenturl
                     else:
                         document_hash, document_content, has_saa, request_saa, saa_for = self.hash_content(response)
                         parent_list = get_parent_frames(frame=response.frame)
@@ -386,7 +395,8 @@ class StorageAccessApi(Module):
             """
             if self.saa_found:
                 store_site_data_db(self.top_level, logger=self.crawler.log, site=self.crawler.task.site,
-                                   browser=Config.BROWSER, job_id=self.crawler.job_id)
+                                   browser=Config.BROWSER, job_id=self.crawler.job_id,
+                                   landing_page=self.current_url == self.crawler.landingurl)
             self.top_level = FrameHierarchy(url="", sha1="undefined", content=b"undefined")
             self.saa_found = False
 
@@ -406,7 +416,8 @@ class StorageAccessApi(Module):
                 job=self.crawler.job_id,
                 defaults={"site": self.crawler.task.site, "has_saa": function == "hasStorageAccess",
                           "request_saa": function == "requestStorageAccess",
-                          "saa_for": function == "requestStorageAccessFor"}
+                          "saa_for": function == "requestStorageAccessFor",
+                          "landing_page": self.current_url == self.crawler.landingurl}
             )
             if not created:
                 call_object.has_saa = function == "hasStorageAccess" if not call_object.has_saa else call_object.has_saa
