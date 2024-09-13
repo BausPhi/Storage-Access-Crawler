@@ -282,6 +282,7 @@ class StorageAccessApi(Module):
         self.saa_found = False
         self.top_level = FrameHierarchy(url="", sha1="undefined",
                                         content=b"undefined")
+        self.current_url = ""
 
     @staticmethod
     def register_job(log: Logger) -> None:
