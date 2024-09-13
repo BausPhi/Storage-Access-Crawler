@@ -303,9 +303,11 @@ class StorageAccessApi(Module):
             :return: None
             """
             try:
-                # Do not handle responses with specific status code
-                if (not response.ok or response.status == 204) and not response.status == 404:
-                    return
+                # Do not handle responses with non-ok status code and status 204
+                # Exclude the top-level document from this
+                if not (response.request.resource_type == "document" and response.frame.parent_frame is None):
+                    if not response.ok or response.status == 204:
+                        return
 
                 # Check if response is a script and that it was not a redirect
                 if response.request.resource_type == "script":
