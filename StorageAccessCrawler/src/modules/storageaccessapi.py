@@ -282,7 +282,7 @@ class StorageAccessApi(Module):
         self.saa_found = False
         self.top_level = FrameHierarchy(url="", sha1="undefined",
                                         content=b"undefined")
-        self.current_url = ""
+        self.landing_visited = ""
 
     @staticmethod
     def register_job(log: Logger) -> None:
@@ -396,12 +396,14 @@ class StorageAccessApi(Module):
 
             :return: None
             """
+            site = self.crawler.task.site
             if self.saa_found:
-                store_site_data_db(self.top_level, logger=self.crawler.log, site=self.crawler.task.site,
+                store_site_data_db(self.top_level, logger=self.crawler.log, site=site,
                                    browser=Config.BROWSER, job_id=self.crawler.job_id,
-                                   landing_page=self.current_url == self.crawler.landingurl)
+                                   landing_page=self.landing_visited != site)
             self.top_level = FrameHierarchy(url="", sha1="undefined", content=b"undefined")
             self.saa_found = False
+            self.landing_visited = site
 
         def handle_storage_access_api_called(function, document_url):
             """
@@ -413,14 +415,15 @@ class StorageAccessApi(Module):
             """
             while not self.top_level:
                 pass
+            site = self.crawler.task.site
             call_object, created = SaaCall.get_or_create(
                 top_level_url=self.top_level.url,
                 document_url=document_url,
                 job=self.crawler.job_id,
-                defaults={"site": self.crawler.task.site, "has_saa": function == "hasStorageAccess",
+                defaults={"site": site, "has_saa": function == "hasStorageAccess",
                           "request_saa": function == "requestStorageAccess",
                           "saa_for": function == "requestStorageAccessFor",
-                          "landing_page": self.current_url == self.crawler.landingurl}
+                          "landing_page": self.landing_visited != site}
             )
             if not created:
                 call_object.has_saa = function == "hasStorageAccess" if not call_object.has_saa else call_object.has_saa
