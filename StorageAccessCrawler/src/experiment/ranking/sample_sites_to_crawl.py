@@ -17,12 +17,12 @@ def read_websites(path):
 
 
 def sample_websites(websites):
-    section_1 = websites[:50000]
-    section_2 = websites[50000:100000]
-    section_3 = websites[100000:1000000]
-    section_4 = websites[1000000:]
+    section_1 = websites[:25000]
+    section_2 = websites[25000:100000]
+    section_3 = websites[100000:500000]
+    section_4 = websites[500000:]
 
-    sample_sizes = [50000, 25000, 15000, 10000]
+    sample_sizes = [25000, 25000, 25000, 25000]
     sampled_section_1 = random.sample(section_1, sample_sizes[0])
     sampled_section_2 = random.sample(section_2, sample_sizes[1])
     sampled_section_3 = random.sample(section_3, sample_sizes[2])
