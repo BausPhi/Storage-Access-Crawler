@@ -78,12 +78,12 @@ class SaaCall(BaseModel):
 class Cookies(BaseModel):
     file_url = TextField()
     name = TextField()
-    value = TextField()
     domain = TextField()
     path = TextField()
     inclusion = ForeignKeyField(DocumentInclusion, backref="cookies")
     top_level_url = TextField()
     site = TextField()
+    job = TextField()
 
 
 ####### Helper Functions ##############################################################################################
@@ -162,7 +162,8 @@ def parse_cookie_attributes(parsed_cookie: SimpleCookie) -> (str, Dict[str, str]
         return "", None
 
 
-def store_cookies(cookies: list[SimpleCookie], url: str, document_inclusion: DocumentInclusion, top_level_url: str, site: str):
+def store_cookies(cookies: list[SimpleCookie], url: str, document_inclusion: DocumentInclusion, top_level_url: str,
+                  site: str, job: str):
     """
     Stores an encountered cookie in the database
 
@@ -171,6 +172,7 @@ def store_cookies(cookies: list[SimpleCookie], url: str, document_inclusion: Doc
     :param document_inclusion: Document Inclusion that stored the cookie
     :param top_level_url: Top level URL that was visited when the cookie was stored
     :param site: Site that was visited when the cookie was stored
+    :param job: Current crawling job
     :return:
     """
     for cookie in cookies:
@@ -179,12 +181,12 @@ def store_cookies(cookies: list[SimpleCookie], url: str, document_inclusion: Doc
             Cookies.create(
                 file_url=url,
                 name=name,
-                value=cookie[name].value,
                 domain=attributes["domain"],
                 path=attributes["path"],
                 inclusion=document_inclusion,
                 top_level_url=top_level_url if top_level_url is not None else url,
-                site=site
+                site=site,
+                job=job,
             )
 
 
@@ -265,9 +267,7 @@ def store_site_data_db(frame: FrameHierarchy,
     :param parent_document_inclusion: Parent frame in the hierarchy
     :return: None
     """
-    saa_used = False
     if frame.has_saa or frame.request_saa or frame.saa_for:
-        saa_used = True
         document, created = Document.get_or_create(
             sha1=frame.sha1,
             defaults={"has_saa": frame.has_saa, "request_saa": frame.request_saa,
@@ -293,14 +293,13 @@ def store_site_data_db(frame: FrameHierarchy,
         job=job_id,
         landing_page=landing_page,
     )
-    if saa_used:
-        store_cookies(frame.cookies, current_url, document_inclusion,
+    store_cookies(frame.cookies, current_url, document_inclusion,
+                  top_level_url if top_level_url is not None else current_url,
+                  site, job_id)
+    for cookies in frame.resource_cookies:
+        store_cookies(cookies["cookies"], cookies["url"], document_inclusion,
                       top_level_url if top_level_url is not None else current_url,
-                      site)
-        for cookies in frame.resource_cookies:
-            store_cookies(cookies["cookies"], cookies["url"], document_inclusion,
-                          top_level_url if top_level_url is not None else current_url,
-                          site)
+                      site, job_id)
 
     for script in frame.scripts:
         if script["has_saa"] or script["request_saa"] or script["saa_for"]:
@@ -322,9 +321,9 @@ def store_site_data_db(frame: FrameHierarchy,
                 job=job_id,
                 landing_page=landing_page,
             )
-            store_cookies(script["cookies"], script["url"], document_inclusion,
-                          top_level_url if top_level_url is not None else current_url,
-                          site)
+        store_cookies(script["cookies"], script["url"], document_inclusion,
+                      top_level_url if top_level_url is not None else current_url,
+                      site, job_id)
 
     for child_url, child_frame in frame.children.items():
         store_site_data_db(
