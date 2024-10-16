@@ -6,3 +6,5 @@ secrets
 
 ######## Other files #######
 *.csv
+*.html
+*.txt

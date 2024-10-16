@@ -124,20 +124,20 @@ def get_url_from_href(href: str, origin: tld.utils.Result) -> Optional[tld.utils
     Returns:
     - Optional[tld.utils.Result]: The parsed href as a TLD.utils.Result object.
     """
-    if re.match('^http', href) is not None:
-        res: Optional[tld.utils.Result] = get_tld_object(href)
-    elif re.match('^//', href) is not None:
-        res: Optional[tld.utils.Result] = get_tld_object(origin.parsed_url.scheme + ":" + href)
-    else:
-        if href[0] == '/':
-            path: str = ""
-        else:
-            path: str = "/"
+    if (href is None) or (not href.strip()):
+        return None
 
-        res: Optional[tld.utils.Result] = get_tld_object(
-            origin.parsed_url.scheme + "://" + origin.parsed_url.netloc + path + href)
+    if '://' in href:
+        return get_tld_object(href)
 
-    return res
+    if href.startswith('//'):
+        return get_tld_object(origin.parsed_url.scheme + ":" + href)
+
+    if href[0] == '/':
+        return get_tld_object(origin.parsed_url.scheme + "://" + origin.parsed_url.netloc + href)
+
+    url = get_url_full(origin)
+    return get_tld_object((url + href) if (url[-1] == '/') else (url + '/' + href))
 
 
 def get_screenshot(page: Page, path: pathlib.Path, force: bool) -> None:
