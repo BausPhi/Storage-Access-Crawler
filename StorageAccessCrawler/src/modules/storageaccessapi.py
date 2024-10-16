@@ -4,11 +4,13 @@ import random
 import re
 import string
 import traceback
+import datetime
 from config import Config
 from datetime import datetime
 from http.cookies import SimpleCookie
 from logging import Logger
 from typing import List, Optional, Dict
+from utils import get_domain_from_url
 
 from playwright.sync_api import Response, Frame
 from playwright._impl._errors import TargetClosedError, Error
@@ -76,14 +78,19 @@ class SaaCall(BaseModel):
 
 
 class Cookies(BaseModel):
-    file_url = TextField()
     name = TextField()
     domain = TextField()
     path = TextField()
-    inclusion = ForeignKeyField(DocumentInclusion, backref="cookies")
-    top_level_url = TextField()
+    expires = DateTimeField()
+    secure = BooleanField
+    sameSite = TextField()
+    httponly = BooleanField()
     site = TextField()
     job = TextField()
+
+    # Make cookie unique by name, site and job
+    class Meta:
+        indexes = ((('name', 'site', 'job'), True),)
 
 
 ####### Helper Functions ##############################################################################################
@@ -162,32 +169,29 @@ def parse_cookie_attributes(parsed_cookie: SimpleCookie) -> (str, Dict[str, str]
         return "", None
 
 
-def store_cookies(cookies: list[SimpleCookie], url: str, document_inclusion: DocumentInclusion, top_level_url: str,
-                  site: str, job: str):
+def store_cookies(cookies: list[SimpleCookie], site: str, job: str):
     """
-    Stores an encountered cookie in the database
+    Stores cookies in the database
 
     :param cookies: List of cookie objects
-    :param url: URL of request that stored cookie
-    :param document_inclusion: Document Inclusion that stored the cookie
-    :param top_level_url: Top level URL that was visited when the cookie was stored
     :param site: Site that was visited when the cookie was stored
     :param job: Current crawling job
     :return:
     """
     for cookie in cookies:
-        name, attributes = parse_cookie_attributes(cookie)
-        if attributes is not None:
-            Cookies.create(
-                file_url=url,
-                name=name,
-                domain=attributes["domain"],
-                path=attributes["path"],
-                inclusion=document_inclusion,
-                top_level_url=top_level_url if top_level_url is not None else url,
-                site=site,
-                job=job,
-            )
+        Cookies.get_or_create(
+            name=cookie["name"],
+            site=site,
+            job=job,
+            defaults={
+                "domain": cookie["domain"],
+                "path": cookie["path"],
+                "expires": datetime.fromtimestamp(cookie["expires"]),
+                "httponly": cookie["httpOnly"],
+                "secure": cookie["secure"],
+                "sameSite": cookie["sameSite"]
+            }
+        )
 
 
 class FrameHierarchy:
@@ -196,7 +200,7 @@ class FrameHierarchy:
     all information about the frame, its documents, scripts and references to the children frames.
     """
 
-    def __init__(self, url, sha1, content, has_saa=False, request_saa=False, saa_for=False, cookies=None):
+    def __init__(self, url, sha1, content, has_saa=False, request_saa=False, saa_for=False):
         self.url = url
         self.sha1 = sha1
         self.content = content
@@ -206,8 +210,7 @@ class FrameHierarchy:
         self.has_saa = has_saa
         self.request_saa = request_saa
         self.saa_for = saa_for
-        self.cookies = [] if cookies is None else cookies
-        self.resource_cookies = []
+        self.cookies = []
 
     def add_children(self, child):
         if child.url in self.children:
@@ -274,6 +277,12 @@ def store_site_data_db(frame: FrameHierarchy,
                       "saa_for": frame.saa_for}
         )
         store_file(frame.sha1, frame.content)
+        if frame.request_saa:
+            site_new_task = get_domain_from_url(frame.url)
+            url_new_task = f"https://{site_new_task}"
+            if not Task.select().where(Task.site == site_new_task).exists():
+                Task.create(job=job_id, site=site_new_task, url=url_new_task,
+                            landing_page=url_new_task, rank=100001, note="cookies")
     else:
         document, created = Document.get_or_create(
             sha1="dummy_document_for_non_saa_inclusions",
@@ -293,13 +302,6 @@ def store_site_data_db(frame: FrameHierarchy,
         job=job_id,
         landing_page=landing_page,
     )
-    store_cookies(frame.cookies, current_url, document_inclusion,
-                  top_level_url if top_level_url is not None else current_url,
-                  site, job_id)
-    for cookies in frame.resource_cookies:
-        store_cookies(cookies["cookies"], cookies["url"], document_inclusion,
-                      top_level_url if top_level_url is not None else current_url,
-                      site, job_id)
 
     for script in frame.scripts:
         if script["has_saa"] or script["request_saa"] or script["saa_for"]:
@@ -321,9 +323,12 @@ def store_site_data_db(frame: FrameHierarchy,
                 job=job_id,
                 landing_page=landing_page,
             )
-        store_cookies(script["cookies"], script["url"], document_inclusion,
-                      top_level_url if top_level_url is not None else current_url,
-                      site, job_id)
+            if script["request_saa"]:
+                site_new_task = get_domain_from_url(current_url)
+                url_new_task = f"https://{site_new_task}"
+                if not Task.select().where(Task.site == site_new_task).exists():
+                    Task.create(job=job_id, site=site_new_task, url=url_new_task,
+                                landing_page=url_new_task, rank=100001, note="cookies")
 
     for child_url, child_frame in frame.children.items():
         store_site_data_db(
@@ -371,20 +376,16 @@ class StorageAccessApi(Module):
             :return: None
             """
             try:
+                # Get cookies stored for top-level site
+                for cookie in self.crawler.context.cookies():
+                    if self.top_level is not None and cookie not in self.top_level.cookies:
+                        self.top_level.cookies.append(cookie)
+
                 # Do not handle responses with non-ok status code and status 204
                 # Exclude the top-level document from this
                 if not (response.request.resource_type == "document" and response.frame.parent_frame is None):
                     if not response.ok or response.status == 204:
                         return
-
-                # Parse Cookies
-                cookies_str = response.header_value("set-cookie")
-                cookies = [] if cookies_str is None else cookies_str.split("\n")
-                parsed_cookies = []
-                for cookie in cookies:
-                    parsed_cookie = SimpleCookie()
-                    parsed_cookie.load(cookie)
-                    parsed_cookies.append(parsed_cookie)
 
                 # Check if response is a script and that it was not a redirect
                 if response.request.resource_type == "script":
@@ -393,7 +394,7 @@ class StorageAccessApi(Module):
                     parent_frame = self.top_level.find_child(parent_list)
                     parent_frame.add_script({
                         "sha1": script_hash, "url": response.url, "content": script_content, "has_saa": has_saa,
-                        "request_saa": request_saa, "saa_for": saa_for, "cookies": parsed_cookies,
+                        "request_saa": request_saa, "saa_for": saa_for,
                     })
                 # Check if response is a document and that it was not a redirect
                 elif response.request.resource_type == "document":
@@ -403,8 +404,7 @@ class StorageAccessApi(Module):
                         stored_scripts, stored_children = self.top_level.scripts, self.top_level.children
                         self.top_level = FrameHierarchy(url=response.url, sha1=document_hash,
                                                         content=document_content, has_saa=has_saa,
-                                                        request_saa=request_saa, saa_for=saa_for,
-                                                        cookies=parsed_cookies)
+                                                        request_saa=request_saa, saa_for=saa_for)
                         self.top_level.children = stored_children
                         self.top_level.scripts = stored_scripts
                         self.current_url = self.crawler.currenturl
@@ -414,16 +414,7 @@ class StorageAccessApi(Module):
                         parent_frame = self.top_level.find_child(parent_list)
                         parent_frame.add_children(FrameHierarchy(url=response.url, sha1=document_hash,
                                                                  content=document_content, has_saa=has_saa,
-                                                                 request_saa=request_saa, saa_for=saa_for,
-                                                                 cookies=parsed_cookies))
-                else:
-                    if parsed_cookies:
-                        parent_list = get_parent_frames(frame=response.frame)
-                        parent_frame = self.top_level.find_child(parent_list)
-                        parent_frame.resource_cookies.append({
-                            "cookies": parsed_cookies,
-                            "url": response.url
-                        })
+                                                                 request_saa=request_saa, saa_for=saa_for))
             except TargetClosedError:
                 self.crawler.log.warning(f"Problem handling response {response.url}: Target page was already closed")
             except Error as e:
@@ -483,10 +474,12 @@ class StorageAccessApi(Module):
             :return: None
             """
             site = self.crawler.task.site
-            if self.saa_found:
+            if self.saa_found and self.crawler.task.note != "cookies":
                 store_site_data_db(self.top_level, logger=self.crawler.log, site=site,
                                    browser=Config.BROWSER, job_id=self.crawler.job_id,
                                    landing_page=self.landing_visited != site)
+            if self.crawler.task.note == "cookies":
+                store_cookies(self.top_level.cookies, site, self.crawler.job_id)
             self.top_level = FrameHierarchy(url="", sha1="undefined", content=b"undefined")
             self.saa_found = False
             self.landing_visited = site

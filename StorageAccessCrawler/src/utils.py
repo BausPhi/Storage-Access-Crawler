@@ -3,6 +3,7 @@ import re
 from typing import Optional
 
 import tld
+import tldextract
 from config import Config
 from playwright.sync_api import Error, Frame, Locator, Page, Response
 from tld.exceptions import TldBadUrl, TldDomainNotFound
@@ -14,6 +15,25 @@ SSO: str = r'Facebook|Twitter|Google|Yahoo|Windows.?Live|Linked.?In|Git.?Hub|Pay
            r'v.?Kontakte|Yandex|37.?signals|Salesforce|Fitbit|Baidu|Ren.?Ren|Weibo|AOL|Shopify|' \
            r'Word.?Press|Dwolla|miiCard|Yammer|Sound.?Cloud|Instagram|The.?City|Apple|Slack|' \
            r'Evernote'
+
+
+def get_domain_from_url(url: str, tldplus1: bool = False):
+    """
+    Parses the domain or eTLD+1 from a URL
+
+    Args:
+    - url (str): The URL string from which the domain will be parsed.
+    - tldplus1 (bool, optional): Whether the URL string should be parsed to TLD+1.
+
+    Returns:
+    - Optional[tld.utils.Result]: The parsed TLD.utils.Result object.
+    :return:
+    """
+    extracted = tldextract.extract(url)
+    if extracted.subdomain and not tldplus1:
+        return f"{extracted.subdomain}.{extracted.domain}.{extracted.suffix}"
+    else:
+        return f"{extracted.domain}.{extracted.suffix}"
 
 
 def get_tld_object(url: str) -> Optional[tld.utils.Result]:
