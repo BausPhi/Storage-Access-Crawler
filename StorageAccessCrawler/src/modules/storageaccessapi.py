@@ -280,7 +280,9 @@ def store_site_data_db(frame: FrameHierarchy,
         if frame.request_saa:
             site_new_task = get_domain_from_url(frame.url)
             url_new_task = f"https://{site_new_task}"
-            if not Task.select().where(Task.site == site_new_task).exists():
+            if not Task.select().where(
+                (Task.site == site_new_task) & (Task.job_id == job_id)
+            ).exists():
                 Task.create(job=job_id, site=site_new_task, url=url_new_task,
                             landing_page=url_new_task, rank=100001, note="cookies")
     else:
@@ -326,7 +328,9 @@ def store_site_data_db(frame: FrameHierarchy,
             if script["request_saa"]:
                 site_new_task = get_domain_from_url(current_url)
                 url_new_task = f"https://{site_new_task}"
-                if not Task.select().where(Task.site == site_new_task).exists():
+                if not Task.select().where(
+                    (Task.site == site_new_task) & (Task.job_id == job_id)
+                ).exists():
                     Task.create(job=job_id, site=site_new_task, url=url_new_task,
                                 landing_page=url_new_task, rank=100001, note="cookies")
 
