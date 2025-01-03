@@ -1,3 +1,4 @@
+import argparse
 import random
 import os
 import urllib.request
@@ -34,7 +35,7 @@ def sample_websites(websites):
     return result
 
 
-def main(sample_path):
+def main(sample_path, tranco_url='https://tranco-list.eu/download/4Q39X/full'):
     # Set working directory to file directory
     abspath = os.path.abspath(__file__)
     dname = os.path.dirname(abspath)
@@ -42,10 +43,9 @@ def main(sample_path):
 
     # Make directory for tranco ranking
     tranco_path = 'tranco.csv'
-    url = 'https://tranco-list.eu/download/4Q39X/full'
     if not os.path.isfile(tranco_path):
         print("Starting download of Tranco ranking!")
-        urllib.request.urlretrieve(url, tranco_path)
+        urllib.request.urlretrieve(tranco_url, tranco_path)
         print("Tranco ranking successfully downloaded!")
     else:
         print("Tranco ranking already downloaded!")
@@ -56,8 +56,9 @@ def main(sample_path):
         fd.writelines(sampled_websites)
 
 
-file_path = 'tranco.csv'
-
-
 if __name__ == '__main__':
-    main(file_path)
+    file_path = 'tranco.csv'
+    args_parser = argparse.ArgumentParser()
+    args_parser.add_argument("-t", "--tranco", type=str, required=False, help="Tranco list URL to sample data from")
+    args = vars(args_parser.parse_args())
+    main(file_path, args.get('tranco'))
